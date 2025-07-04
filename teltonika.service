@@ -1,0 +1,31 @@
+[Unit]
+Description=Teltonika GPS Tracking Server
+Documentation=https://wiki.teltonika-gps.com/view/Codec
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=teltonika
+Group=teltonika
+WorkingDirectory=/opt/teltonika
+ExecStart=/usr/bin/python3 /opt/teltonika/teltonika_service.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=teltonika
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/teltonika /var/lib/teltonika
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target 
