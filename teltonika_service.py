@@ -16,14 +16,13 @@ import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-# Django PostgreSQL integration
+# Django API integration
 try:
-    sys.path.append('../teltonika-django')
     from django_integration import create_db_integration
-    DB_INTEGRATION_AVAILABLE = True
+    API_INTEGRATION_AVAILABLE = True
 except ImportError:
-    DB_INTEGRATION_AVAILABLE = False
-    print("Warning: Django database integration not available")
+    API_INTEGRATION_AVAILABLE = False
+    print("Warning: Django API integration not available")
 
 # Configuration
 CONFIG = {
@@ -43,16 +42,16 @@ class TeltonikaService:
         self.setup_logging()
         self.setup_directories()
         
-        # Initialize database integration
-        if DB_INTEGRATION_AVAILABLE:
+        # Initialize fast API integration
+        if API_INTEGRATION_AVAILABLE:
             try:
-                self.db_integration = create_db_integration('http://localhost:8000')
-                self.logger.info("Database integration initialized successfully")
+                self.api_integration = create_db_integration('http://localhost:8000')
+                self.logger.info("Fast API integration initialized successfully")
             except Exception as e:
-                self.logger.warning(f"Failed to initialize database integration: {e}")
-                self.db_integration = None
+                self.logger.warning(f"Failed to initialize fast API integration: {e}")
+                self.api_integration = None
         else:
-            self.db_integration = None
+            self.api_integration = None
         
     def setup_directories(self):
         """Create necessary directories"""
@@ -510,25 +509,25 @@ class TeltonikaService:
             return None
     
     def store_in_database(self, imei, timestamp, gps_data, io_data, priority=None, event_io_id=None):
-        """Store GPS data in PostgreSQL database via Django API"""
-        if not self.db_integration:
+        """Store GPS data via fast API integration"""
+        if not self.api_integration:
             return
             
         try:
-            success = self.db_integration.store_gps_record(
+            success = self.api_integration.store_gps_record(
                 imei=imei,
                 timestamp=timestamp,
                 gps_data=gps_data,
-                io_data=io_data['io_data'] if io_data else {},
-                priority=priority,
+                io_data=io_data,
+                priority=priority or 0,
                 event_io_id=event_io_id
             )
             if success:
-                self.logger.debug(f"Successfully stored GPS data for {imei} in database")
+                self.logger.debug(f"Successfully queued GPS data for {imei} via API")
             else:
-                self.logger.warning(f"Failed to store GPS data for {imei} in database")
+                self.logger.warning(f"Failed to queue GPS data for {imei} via API")
         except Exception as e:
-            self.logger.error(f"Error storing GPS data in database: {e}")
+            self.logger.error(f"Error storing GPS data via API: {e}")
 
     def log_gps_data(self, imei, timestamp, gps_data, io_data):
         """Log GPS data to file and console in clean format"""
