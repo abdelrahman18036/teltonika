@@ -16,6 +16,15 @@ import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+# Django PostgreSQL integration
+try:
+    sys.path.append('../teltonika-django')
+    from django_integration import create_db_integration
+    DB_INTEGRATION_AVAILABLE = True
+except ImportError:
+    DB_INTEGRATION_AVAILABLE = False
+    print("Warning: Django database integration not available")
+
 # Configuration
 CONFIG = {
     'host': '0.0.0.0',
@@ -33,6 +42,17 @@ class TeltonikaService:
         self.server_socket = None
         self.setup_logging()
         self.setup_directories()
+        
+        # Initialize database integration
+        if DB_INTEGRATION_AVAILABLE:
+            try:
+                self.db_integration = create_db_integration('http://localhost:8000')
+                self.logger.info("Database integration initialized successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize database integration: {e}")
+                self.db_integration = None
+        else:
+            self.db_integration = None
         
     def setup_directories(self):
         """Create necessary directories"""
@@ -489,6 +509,27 @@ class TeltonikaService:
         except:
             return None
     
+    def store_in_database(self, imei, timestamp, gps_data, io_data, priority=None, event_io_id=None):
+        """Store GPS data in PostgreSQL database via Django API"""
+        if not self.db_integration:
+            return
+            
+        try:
+            success = self.db_integration.store_gps_record(
+                imei=imei,
+                timestamp=timestamp,
+                gps_data=gps_data,
+                io_data=io_data['io_data'] if io_data else {},
+                priority=priority,
+                event_io_id=event_io_id
+            )
+            if success:
+                self.logger.debug(f"Successfully stored GPS data for {imei} in database")
+            else:
+                self.logger.warning(f"Failed to store GPS data for {imei} in database")
+        except Exception as e:
+            self.logger.error(f"Error storing GPS data in database: {e}")
+
     def log_gps_data(self, imei, timestamp, gps_data, io_data):
         """Log GPS data to file and console in clean format"""
         if gps_data:
@@ -522,6 +563,9 @@ class TeltonikaService:
                         self.logger.info(f"  {param}")
             
             self.logger.info("---")
+            
+            # Store in database
+            self.store_in_database(imei, timestamp, gps_data, io_data)
     
     def log_device_event(self, imei, event, data):
         """Log device events to file"""
