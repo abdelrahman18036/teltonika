@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Teltonika Server Installation Script for Ubuntu
+# Teltonika GPS Tracking Server Installation Script for Ubuntu
+# Features: Clean logging with IMEI and vehicle parameters only
 # Run with sudo: sudo bash install.sh
 
 set -e
@@ -43,12 +44,8 @@ echo "✅ Directories created with proper permissions"
 # Copy service files
 echo "📋 Installing service files..."
 cp teltonika_service.py /opt/teltonika/
-cp test_data_generator.py /opt/teltonika/
 chmod +x /opt/teltonika/teltonika_service.py
-chmod +x /opt/teltonika/test_data_generator.py
-
 chown teltonika:teltonika /opt/teltonika/teltonika_service.py
-chown teltonika:teltonika /opt/teltonika/test_data_generator.py
 
 echo "✅ Service files installed"
 
@@ -106,14 +103,23 @@ systemctl status $SERVICE_NAME --no-pager -l
 
 echo ""
 echo "📁 Log Files:"
-echo "Service Log: /var/log/teltonika/teltonika_service.log"
+echo "Main Log: /var/log/teltonika/teltonika_service.log"
 echo "GPS Data: /var/log/teltonika/gps_data.log"
 echo "Events: /var/log/teltonika/device_events.log"
 
 echo ""
-echo "📈 Recent GPS Data (last 10 entries):"
+echo "📈 Recent Activity (last 20 lines):"
+if [ -f "/var/log/teltonika/teltonika_service.log" ]; then
+    echo "--- Clean Log Output ---"
+    tail -20 /var/log/teltonika/teltonika_service.log
+else
+    echo "No activity log found yet"
+fi
+
+echo ""
+echo "📡 Recent GPS Data (last 5 entries):"
 if [ -f "$LOG_FILE" ]; then
-    tail -10 "$LOG_FILE" | while read line; do
+    tail -5 "$LOG_FILE" | while read line; do
         timestamp=$(echo $line | cut -d' ' -f1-2)
         gps_data=$(echo $line | jq -r '. | "\(.imei) - \(.latitude),\(.longitude) - Speed: \(.speed)km/h"' 2>/dev/null || echo "Invalid JSON")
         echo "$timestamp: $gps_data"
@@ -129,6 +135,15 @@ df -h /var/log/teltonika /var/lib/teltonika
 echo ""
 echo "🔗 Network Connections:"
 netstat -tlnp | grep :5000 || echo "No connections on port 5000"
+
+echo ""
+echo "📋 Log Format Information:"
+echo "The service provides clean output showing:"
+echo "  - Device IMEI"
+echo "  - GPS coordinates (latitude, longitude)"
+echo "  - Vehicle speed, altitude, satellites"
+echo "  - All vehicle parameters (ignition, voltage, etc.)"
+echo "  - No debug or technical logs"
 EOF
 
 chmod +x /opt/teltonika/monitor.sh
@@ -159,20 +174,33 @@ case "$1" in
     monitor)
         sudo /opt/teltonika/monitor.sh
         ;;
-    test)
-        cd /opt/teltonika && python3 test_data_generator.py
+    clean-logs)
+        echo "📋 Clean Log Output (last 50 lines):"
+        sudo tail -50 /var/log/teltonika/teltonika_service.log
+        ;;
+    live)
+        echo "🔴 Live GPS tracking (press Ctrl+C to stop):"
+        sudo tail -f /var/log/teltonika/teltonika_service.log | grep --line-buffered "Device IMEI\|GPS Coordinates\|Vehicle Parameters"
         ;;
     *)
-        echo "Usage: teltonika {start|stop|restart|status|logs|monitor|test}"
+        echo "Teltonika GPS Tracking Server - Clean Logging Edition"
+        echo "Usage: teltonika {start|stop|restart|status|logs|monitor|clean-logs|live}"
         echo ""
         echo "Commands:"
-        echo "  start   - Start the service"
-        echo "  stop    - Stop the service"
-        echo "  restart - Restart the service"
-        echo "  status  - Show service status"
-        echo "  logs    - Show real-time logs"
-        echo "  monitor - Show monitoring dashboard"
-        echo "  test    - Run test data generator"
+        echo "  start      - Start the service"
+        echo "  stop       - Stop the service" 
+        echo "  restart    - Restart the service"
+        echo "  status     - Show service status"
+        echo "  logs       - Show real-time system logs"
+        echo "  monitor    - Show monitoring dashboard"
+        echo "  clean-logs - Show recent clean log output"
+        echo "  live       - Live GPS tracking display"
+        echo ""
+        echo "Features:"
+        echo "  ✅ Clean logging (IMEI + GPS + Parameters only)"
+        echo "  ✅ No debug noise or technical details"
+        echo "  ✅ Human-readable vehicle parameters"
+        echo "  ✅ Properly formatted units (V, °C, km/h, etc.)"
         ;;
 esac
 EOF
@@ -188,21 +216,20 @@ systemctl start teltonika
 echo ""
 echo "🎉 Installation completed successfully!"
 echo ""
-echo "📋 Quick Start Guide:"
-echo "===================="
+echo "📋 Teltonika GPS Tracking Server - Clean Logging Edition"
+echo "========================================================"
 echo ""
 echo "🔧 Service Management:"
-echo "   teltonika start     - Start the service"
-echo "   teltonika stop      - Stop the service"
-echo "   teltonika status    - Check service status"
-echo "   teltonika logs      - View real-time logs"
-echo "   teltonika monitor   - Show monitoring dashboard"
-echo ""
-echo "🧪 Testing:"
-echo "   teltonika test      - Run test data generator"
+echo "   teltonika start      - Start the service"
+echo "   teltonika stop       - Stop the service"
+echo "   teltonika status     - Check service status"
+echo "   teltonika logs       - View real-time system logs"
+echo "   teltonika monitor    - Show monitoring dashboard"
+echo "   teltonika clean-logs - Show clean log output"
+echo "   teltonika live       - Live GPS tracking display"
 echo ""
 echo "📁 Log Files:"
-echo "   Service: /var/log/teltonika/teltonika_service.log"
+echo "   Main Log: /var/log/teltonika/teltonika_service.log"
 echo "   GPS Data: /var/log/teltonika/gps_data.log"
 echo "   Events: /var/log/teltonika/device_events.log"
 echo ""
@@ -211,10 +238,20 @@ echo "   Host: 0.0.0.0 (all interfaces)"
 echo "   Port: 5000"
 echo "   Protocol: TCP"
 echo ""
-echo "🚗 Configure your device to connect to:"
-echo "   Server IP: $(hostname -I | awk '{print $1}')"
-echo "   Port: 5000"
-echo "   Protocol: TCP"
-echo "   Codec: Codec8"
+echo "📊 What You'll See in Logs:"
+echo "   ✅ Device IMEI identification"
+echo "   ✅ GPS coordinates (lat, lon)"
+echo "   ✅ Vehicle speed, altitude, satellites"
+echo "   ✅ All vehicle parameters with proper units:"
+echo "      • Ignition status (ON/OFF)"
+echo "      • Digital inputs/outputs (HIGH/LOW)"
+echo "      • Voltages (13.85V format)"
+echo "      • Temperatures (25.5°C format)"
+echo "      • Fuel levels, engine RPM, etc."
+echo "   ❌ No debug logs or technical noise"
 echo ""
-echo "✅ The service is now running and ready to receive data!" 
+echo "🚗 Configure your device to connect to:"
+echo "   IP: $(hostname -I | awk '{print $1}'):5000"
+echo ""
+echo "🔴 Start live tracking: teltonika live"
+echo "📊 View dashboard: teltonika monitor" 

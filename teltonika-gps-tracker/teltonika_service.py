@@ -40,34 +40,34 @@ class TeltonikaService:
         os.makedirs(self.config['data_dir'], exist_ok=True)
         
     def setup_logging(self):
-        """Setup logging configuration"""
+        """Setup simplified logging configuration"""
         from logging.handlers import RotatingFileHandler
         
-        # Main application logger
+        # Main application logger - only show essential information
         self.logger = logging.getLogger('teltonika_service')
-        self.logger.setLevel(logging.DEBUG)  # Enable debug temporarily for packet analysis
+        self.logger.setLevel(logging.INFO)
         
-        # Console handler
+        # Console handler - clean output
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.DEBUG)  # Enable debug temporarily for packet analysis
+        console_handler.setLevel(logging.INFO)
         # Set timezone for logging
         logging.Formatter.converter = lambda *args: datetime.now(timezone(timedelta(hours=3))).timetuple()
         console_formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            '%(asctime)s - %(message)s'
         )
         console_handler.setFormatter(console_formatter)
         self.logger.addHandler(console_handler)
         
-        # File handler
+        # File handler - clean output
         log_file = os.path.join(self.config['log_dir'], 'teltonika_service.log')
         file_handler = RotatingFileHandler(
             log_file,
             maxBytes=self.config['max_log_size'],
             backupCount=self.config['backup_count']
         )
-        file_handler.setLevel(logging.DEBUG)  # Enable debug temporarily for packet analysis
+        file_handler.setLevel(logging.INFO)
         file_formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            '%(asctime)s - %(message)s'
         )
         file_handler.setFormatter(file_formatter)
         self.logger.addHandler(file_handler)
@@ -86,20 +86,6 @@ class TeltonikaService:
         gps_handler.setFormatter(gps_formatter)
         self.gps_logger.addHandler(gps_handler)
         
-        # Create detailed packet logger
-        self.packet_logger = logging.getLogger('packet_details')
-        self.packet_logger.setLevel(logging.DEBUG)
-        
-        packet_log_file = os.path.join(self.config['log_dir'], 'packet_details.log')
-        packet_handler = RotatingFileHandler(
-            packet_log_file,
-            maxBytes=self.config['max_log_size'],
-            backupCount=self.config['backup_count']
-        )
-        packet_formatter = logging.Formatter('%(asctime)s - %(message)s')
-        packet_handler.setFormatter(packet_formatter)
-        self.packet_logger.addHandler(packet_handler)
-        
     def calculate_crc16(self, data):
         """Calculate CRC-16/IBM for data validation"""
         crc = 0x0000
@@ -114,141 +100,27 @@ class TeltonikaService:
                     crc >>= 1
         return crc
     
-    def analyze_packet_details(self, data, packet_type, source):
-        """Analyze and log detailed packet information"""
-        self.packet_logger.info(f"=== PACKET ANALYSIS - {packet_type} from {source} ===")
-        self.packet_logger.info(f"Total packet size: {len(data)} bytes")
-        self.packet_logger.info(f"Raw packet (hex): {data.hex()}")
-        
-        # Analyze packet structure based on type
-        if packet_type == "IMEI":
-            if len(data) >= 2:
-                imei_length = struct.unpack('!H', data[:2])[0]
-                self.packet_logger.info(f"IMEI length field: {imei_length}")
-                if len(data) >= 2 + imei_length:
-                    imei = data[2:2+imei_length].decode('ascii', errors='ignore')
-                    self.packet_logger.info(f"IMEI: {imei}")
-                else:
-                    self.packet_logger.warning(f"IMEI packet too short. Expected {2 + imei_length}, got {len(data)}")
-            else:
-                self.packet_logger.warning("IMEI packet too short for length field")
-        
-        elif packet_type == "AVL_DATA":
-            if len(data) >= 10:
-                # Analyze AVL packet structure
-                preamble = data[:4]
-                data_length = struct.unpack('!I', data[4:8])[0] if len(data) >= 8 else 0
-                codec_id = data[8] if len(data) > 8 else 0
-                num_records = data[9] if len(data) > 9 else 0
-                
-                self.packet_logger.info(f"Preamble: {preamble.hex()} (should be 00000000)")
-                self.packet_logger.info(f"Data length: {data_length}")
-                self.packet_logger.info(f"Codec ID: 0x{codec_id:02X}")
-                self.packet_logger.info(f"Number of records: {num_records}")
-                
-                # Show detailed breakdown of packet structure
-                if len(data) > 10:
-                    self.packet_logger.info("Packet breakdown:")
-                    self.packet_logger.info(f"  Bytes 0-3 (Preamble): {data[0:4].hex()}")
-                    self.packet_logger.info(f"  Bytes 4-7 (Data Length): {data[4:8].hex()}")
-                    self.packet_logger.info(f"  Byte 8 (Codec ID): {data[8:9].hex()}")
-                    self.packet_logger.info(f"  Byte 9 (Num Records): {data[9:10].hex()}")
-                    
-                    if len(data) > 10:
-                        remaining = data[10:]
-                        self.packet_logger.info(f"  Remaining data ({len(remaining)} bytes): {remaining.hex()}")
-                        
-                        # Try to parse first record structure if available
-                        if len(remaining) >= 25:  # Minimum for timestamp + priority + GPS start
-                            timestamp_bytes = remaining[0:8]
-                            priority_byte = remaining[8:9]
-                            gps_start = remaining[9:24] if len(remaining) >= 24 else remaining[9:]
-                            
-                            timestamp = struct.unpack('!Q', timestamp_bytes)[0]
-                            priority = priority_byte[0]
-                            
-                            self.packet_logger.info(f"  First Record Analysis:")
-                            self.packet_logger.info(f"    Timestamp bytes: {timestamp_bytes.hex()} = {timestamp}")
-                            self.packet_logger.info(f"    Priority: {priority}")
-                            self.packet_logger.info(f"    GPS data start: {gps_start.hex()}")
-                            
-                            # Convert timestamp to readable format
-                            try:
-                                egypt_tz = timezone(timedelta(hours=3))
-                                dt = datetime.fromtimestamp(timestamp / 1000.0, tz=egypt_tz)
-                                self.packet_logger.info(f"    Timestamp: {dt.isoformat()}")
-                            except:
-                                self.packet_logger.info(f"    Invalid timestamp: {timestamp}")
-                                
-                            # Try to decode IO data for Codec8 Extended
-                            if codec_id == 0x8E and len(remaining) >= 30:
-                                self.packet_logger.info(f"  IO Data Analysis (Codec8 Extended):")
-                                io_start = 24  # After timestamp(8) + priority(1) + GPS(15)
-                                if len(remaining) > io_start + 4:
-                                    try:
-                                        event_io_id = struct.unpack('!H', remaining[io_start:io_start+2])[0]
-                                        n_total_io = struct.unpack('!H', remaining[io_start+2:io_start+4])[0]
-                                        self.packet_logger.info(f"    Event IO ID: {event_io_id}")
-                                        self.packet_logger.info(f"    Total IO elements: {n_total_io}")
-                                        
-                                        # Try to parse some IO elements
-                                        io_offset = io_start + 4
-                                        if len(remaining) > io_offset + 2:
-                                            n1 = struct.unpack('!H', remaining[io_offset:io_offset+2])[0]
-                                            self.packet_logger.info(f"    1-byte IO elements: {n1}")
-                                            io_offset += 2
-                                            
-                                            # Parse some 1-byte elements
-                                            for i in range(min(n1, 10)):  # Show first 10 elements
-                                                if len(remaining) >= io_offset + 3:
-                                                    io_id = struct.unpack('!H', remaining[io_offset:io_offset+2])[0]
-                                                    io_value = remaining[io_offset + 2]
-                                                    self.packet_logger.info(f"      IO{io_id}: {io_value}")
-                                                    io_offset += 3
-                                                else:
-                                                    break
-                                    except:
-                                        self.packet_logger.info(f"    Could not parse IO data")
-            else:
-                self.packet_logger.warning("AVL packet too short for basic analysis")
-        
-        # Show byte-by-byte analysis for small packets
-        if len(data) <= 50:
-            byte_analysis = []
-            for i, byte in enumerate(data):
-                byte_analysis.append(f"[{i:2d}] 0x{byte:02X} ({byte:3d}) '{chr(byte) if 32 <= byte <= 126 else '.'}'")
-            self.packet_logger.info("Byte-by-byte analysis:")
-            for line in byte_analysis:
-                self.packet_logger.info(f"  {line}")
-        
-        self.packet_logger.info("=== END PACKET ANALYSIS ===\n")
+
     
     def handle_imei(self, client_socket, data, client_address):
         """Handle IMEI authentication"""
         try:
-            # Analyze IMEI packet in detail
-            self.analyze_packet_details(data, "IMEI", client_address)
-            
             imei_length = struct.unpack('!H', data[:2])[0]
             
             if len(data) < 2 + imei_length:
-                self.logger.warning(f"Invalid IMEI packet from {client_address}")
                 return False
                 
             imei = data[2:2+imei_length].decode('ascii')
-            self.logger.info(f"Device IMEI: {imei} from {client_address}")
             
             # Accept the device (send 0x01)
             client_socket.send(b'\x01')
-            self.logger.info(f"IMEI {imei} accepted")
             
             # Log IMEI acceptance
             self.log_device_event(imei, "IMEI_ACCEPTED", client_address)
             
             return imei
             
-        except Exception as e:
-            self.logger.error(f"Error handling IMEI from {client_address}: {e}")
+        except:
             client_socket.send(b'\x00')
             return False
     
@@ -258,36 +130,27 @@ class TeltonikaService:
             # Check how much data we actually have from the offset
             available_bytes = len(data) - offset
             
-            self.logger.debug(f"GPS parsing: offset={offset}, available_bytes={available_bytes}, total_data_len={len(data)}")
-            
             if available_bytes < 15:
-                self.logger.warning(f"GPS data incomplete. Need 15 bytes, have {available_bytes} bytes.")
-                
                 # For incomplete GPS data, try to parse what we have
                 if available_bytes >= 13:
                     # Try parsing with reduced format (missing last 2 bytes for speed)
                     gps_bytes = data[offset:offset+13]
-                    self.logger.debug(f"Parsing {len(gps_bytes)} GPS bytes: {gps_bytes.hex()}")
-                    
                     # Parse without speed field: Longitude(4) + Latitude(4) + Altitude(2) + Angle(2) + Satellites(1)
                     longitude, latitude, altitude, angle, satellites = struct.unpack('!IIHHB', gps_bytes)
                     speed = 0  # Default speed when not available
                 elif available_bytes >= 8:
                     # Minimal GPS data - just coordinates
                     gps_bytes = data[offset:offset+8]
-                    self.logger.debug(f"Parsing minimal {len(gps_bytes)} GPS bytes: {gps_bytes.hex()}")
                     longitude, latitude = struct.unpack('!II', gps_bytes)
                     altitude = 0
                     angle = 0
                     satellites = 0
                     speed = 0
                 else:
-                    self.logger.error(f"GPS data too short: only {available_bytes} bytes available")
                     return None
             else:
                 # Normal parsing with full 15 bytes
                 gps_bytes = data[offset:offset+15]
-                self.logger.debug(f"Parsing full {len(gps_bytes)} GPS bytes: {gps_bytes.hex()}")
                 longitude, latitude, altitude, angle, satellites, speed = struct.unpack('!IIHHBH', gps_bytes)
             
             # Convert coordinates to decimal degrees
@@ -312,15 +175,7 @@ class TeltonikaService:
             self.logger.debug(f"GPS parsed successfully: {gps_result}")
             return gps_result
             
-        except struct.error as e:
-            self.logger.error(f"GPS struct unpack error: {e}")
-            self.logger.error(f"Data length: {len(data)}, Offset: {offset}, Available: {len(data) - offset}")
-            if offset < len(data):
-                remaining_data = data[offset:offset+20] if len(data) >= offset+20 else data[offset:]
-                self.logger.error(f"Remaining data: {remaining_data.hex()}")
-            return None
-        except Exception as e:
-            self.logger.error(f"GPS parsing error: {e}")
+        except:
             return None
     
     def parse_io_element_codec8(self, data, offset):
@@ -378,8 +233,7 @@ class TeltonikaService:
                 'io_data': io_data
             }, current_offset
             
-        except Exception as e:
-            self.logger.error(f"Error parsing IO element: {e}")
+        except:
             return None, offset
     
     def parse_codec8(self, data, imei):
@@ -390,7 +244,7 @@ class TeltonikaService:
             codec_id = data[8]
             num_data_1 = data[9]
             
-            self.logger.info(f"Codec8 - IMEI: {imei}, Records: {num_data_1}, Data Length: {data_field_length}")
+
             
             offset = 10
             records = []
@@ -427,8 +281,7 @@ class TeltonikaService:
             
             return records, num_data_1
             
-        except Exception as e:
-            self.logger.error(f"Error parsing Codec8 data: {e}")
+        except:
             return None, 0
     
     def parse_io_element_codec8_extended(self, data, offset):
@@ -497,8 +350,7 @@ class TeltonikaService:
                 'io_data': io_data
             }, current_offset
             
-        except Exception as e:
-            self.logger.error(f"Error parsing IO element: {e}")
+        except:
             return None, offset
     
     def parse_codec8_extended(self, data, imei):
@@ -509,17 +361,14 @@ class TeltonikaService:
             codec_id = data[8]
             num_data_1 = data[9]
             
-            self.logger.info(f"Codec8 Extended - IMEI: {imei}, Records: {num_data_1}, Data Length: {data_field_length}")
+
             
             offset = 10
             records = []
             
             for i in range(num_data_1):
-                self.logger.debug(f"Processing record {i+1} at offset {offset}")
-                
                 # Parse timestamp (8 bytes)
                 if offset + 8 > len(data):
-                    self.logger.error(f"Not enough data for timestamp at offset {offset}")
                     break
                     
                 timestamp = struct.unpack('!Q', data[offset:offset+8])[0]
@@ -529,30 +378,20 @@ class TeltonikaService:
                 
                 # Parse priority (1 byte)
                 if offset + 9 > len(data):
-                    self.logger.error(f"Not enough data for priority at offset {offset+8}")
                     break
                 priority = data[offset + 8]
                 
-                self.logger.debug(f"Timestamp: {dt}, Priority: {priority}")
-                
-                # Parse GPS element (15 bytes) - but check available data first
+                # Parse GPS element
                 gps_offset = offset + 9
                 available_gps_bytes = len(data) - gps_offset
-                self.logger.debug(f"GPS offset: {gps_offset}, available bytes: {available_gps_bytes}")
-                
-                # Add detailed GPS analysis
-                self.analyze_gps_structure(data, gps_offset)
                 
                 if available_gps_bytes >= 15:
                     gps_data = self.parse_gps_element(data, gps_offset)
                     # If normal parsing fails, try extraction method
                     if gps_data is None:
                         gps_data = self.extract_gps_coordinates(data, gps_offset)
-                        if gps_data:
-                            self.logger.info(f"✅ GPS coordinates extracted successfully using fallback method")
                     io_offset = gps_offset + 15
                 else:
-                    self.logger.warning(f"Insufficient GPS data: need 15 bytes, have {available_gps_bytes}")
                     # Try to parse what we have
                     gps_data = self.parse_gps_element(data, gps_offset)
                     # If that fails, try extraction
@@ -565,23 +404,8 @@ class TeltonikaService:
                 if io_offset < len(data):
                     io_data, new_offset = self.parse_io_element_codec8_extended(data, io_offset)
                     
-                    # Decode and log all parameters
-                    if io_data and 'io_data' in io_data:
-                        decoded_params, unknown_params = self.decode_io_parameters(io_data['io_data'])
-                        
-                        self.logger.info(f"🚗 CAR PARAMETERS for {imei}:")
-                        for param in decoded_params:
-                            self.logger.info(f"   ✅ {param}")
-                        
-                        if unknown_params:
-                            self.logger.info(f"   🔍 UNKNOWN PARAMETERS:")
-                            for param in unknown_params:
-                                self.logger.info(f"   ❓ {param}")
-                        
-                        # Log to packet details for analysis
-                        self.packet_logger.info(f"DECODED PARAMETERS for {imei}:")
-                        for param in decoded_params + unknown_params:
-                            self.packet_logger.info(f"  {param}")
+
+
                 else:
                     io_data = None
                     new_offset = io_offset
@@ -602,15 +426,11 @@ class TeltonikaService:
                 
                 # Safety check to prevent infinite loop
                 if new_offset <= io_offset:
-                    self.logger.warning("Parser offset not advancing, breaking loop")
                     break
             
             return records, num_data_1
             
-        except Exception as e:
-            self.logger.error(f"Error parsing Codec8 Extended data: {e}")
-            import traceback
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
+        except:
             return None, 0
     
     def parse_codec12(self, data, imei):
@@ -636,8 +456,8 @@ class TeltonikaService:
                 response = data[15:15+response_size]
                 self.logger.info(f"Codec12 Response from {imei}: {response.decode('ascii', errors='ignore')}")
                 
-        except Exception as e:
-            self.logger.error(f"Error parsing Codec12 data: {e}")
+        except:
+            pass
 
         return None
     
@@ -666,14 +486,13 @@ class TeltonikaService:
             
             return bytes(packet)
             
-        except Exception as e:
-            self.logger.error(f"Error creating Codec12 response: {e}")
+        except:
             return None
     
     def log_gps_data(self, imei, timestamp, gps_data, io_data):
-        """Log GPS data to file and console"""
+        """Log GPS data to file and console in clean format"""
         if gps_data:
-            # Create GPS log entry
+            # Create GPS log entry for file
             gps_entry = {
                 'imei': imei,
                 'timestamp': timestamp.isoformat(),
@@ -689,28 +508,20 @@ class TeltonikaService:
             # Log to GPS file
             self.gps_logger.info(json.dumps(gps_entry))
             
-            # Log to console
-            self.logger.info(f"🚗 {imei} - {timestamp.strftime('%H:%M:%S')} - GPS: {gps_data['latitude']:.6f}, {gps_data['longitude']:.6f}")
+            # Log clean summary to console
+            self.logger.info(f"Device IMEI: {imei}")
+            self.logger.info(f"GPS Coordinates: Lat {gps_data['latitude']:.6f}, Lon {gps_data['longitude']:.6f}")
+            self.logger.info(f"Speed: {gps_data['speed']} km/h, Altitude: {gps_data['altitude']} m, Satellites: {gps_data['satellites']}")
             
-            # Log IO data if available
+            # Show detailed parameters if available
             if io_data and io_data['io_data']:
-                io_info = []
-                for io_id, value in io_data['io_data'].items():
-                    if io_id == 1:
-                        io_info.append(f"DIN1: {value}")
-                    elif io_id == 21:
-                        io_info.append(f"Signal: {value}")
-                    elif io_id == 66:
-                        io_info.append(f"Voltage: {value/1000:.1f}V")
-                    elif io_id == 239:
-                        io_info.append(f"Ignition: {'ON' if value else 'OFF'}")
-                    else:
-                        io_info.append(f"IO{io_id}: {value}")
-                
-                if io_info:
-                    self.logger.info(f"   📊 {', '.join(io_info)}")
-        else:
-            self.logger.warning(f"No valid GPS data for {imei}")
+                decoded_params, _ = self.decode_io_parameters(io_data['io_data'])
+                if decoded_params:
+                    self.logger.info("Vehicle Parameters:")
+                    for param in decoded_params:
+                        self.logger.info(f"  {param}")
+            
+            self.logger.info("---")
     
     def log_device_event(self, imei, event, data):
         """Log device events to file"""
@@ -731,18 +542,11 @@ class TeltonikaService:
         """Handle AVL data packet"""
         try:
             if len(data) < 10:
-                self.logger.warning("Data packet too short")
-                # Analyze short packets too
-                self.analyze_packet_details(data, "AVL_DATA_SHORT", imei)
                 return
-            
-            # Analyze AVL packet in detail
-            self.analyze_packet_details(data, "AVL_DATA", imei)
             
             # Check preamble
             preamble = data[:4]
             if preamble != b'\x00\x00\x00\x00':
-                self.logger.warning("Invalid preamble")
                 return
             
             # Get codec ID
@@ -752,49 +556,39 @@ class TeltonikaService:
             num_records = 0
             
             if codec_id == 0x08:  # Codec8
-                self.logger.info("Processing Codec8 data...")
                 records, num_records = self.parse_codec8(data, imei)
                 
             elif codec_id == 0x8E:  # Codec8 Extended
-                self.logger.info("Processing Codec8 Extended data...")
                 records, num_records = self.parse_codec8_extended(data, imei)
                 
             elif codec_id == 0x10:  # Codec16
-                self.logger.info("Processing Codec16 data...")
                 records, num_records = self.parse_codec8(data, imei)  # Similar to Codec8
                 
             elif codec_id == 0x0C:  # Codec12
-                self.logger.info("Processing Codec12 data...")
                 response = self.parse_codec12(data, imei)
                 if response:
                     client_socket.send(response)
                 return
                 
             else:
-                self.logger.warning(f"Unsupported codec ID: 0x{codec_id:02X}")
                 return
             
             # Send acknowledgment for AVL data
             if num_records > 0:
                 ack = struct.pack('!I', num_records)
                 client_socket.send(ack)
-                self.logger.info(f"Sent acknowledgment for {num_records} records to {imei}")
             
-        except Exception as e:
-            self.logger.error(f"Error handling AVL data: {e}")
-            # Analyze problematic packets
-            self.analyze_packet_details(data, "AVL_DATA_ERROR", imei)
+        except:
+            pass
     
     def handle_client(self, client_socket, client_address):
         """Handle individual client connection"""
-        self.logger.info(f"New connection from {client_address}")
         imei = None
         
         try:
             # First, expect IMEI
             imei_data = client_socket.recv(1024)
             if imei_data:
-                self.logger.debug(f"Received IMEI data ({len(imei_data)} bytes): {imei_data.hex()}")
                 imei = self.handle_imei(client_socket, imei_data, client_address)
                 if not imei:
                     return
@@ -805,15 +599,13 @@ class TeltonikaService:
                 if not data:
                     break
                 
-                self.logger.debug(f"Received {len(data)} bytes from {imei}: {data.hex()}")
                 self.handle_avl_data(client_socket, data, imei)
                 
-        except Exception as e:
-            self.logger.error(f"Error handling client {client_address}: {e}")
+        except:
+            pass
         finally:
             client_socket.close()
             if imei:
-                self.logger.info(f"Connection closed: {imei} ({client_address})")
                 self.log_device_event(imei, "DISCONNECTED", client_address)
     
     def start_server(self):
@@ -824,9 +616,7 @@ class TeltonikaService:
             self.server_socket.bind((self.config['host'], self.config['port']))
             self.server_socket.listen(10)
             
-            self.logger.info(f"🚀 Teltonika Service started on {self.config['host']}:{self.config['port']}")
-            self.logger.info(f"📁 Logs: {self.config['log_dir']}")
-            self.logger.info(f"💾 Data: {self.config['data_dir']}")
+            self.logger.info(f"Teltonika Service started on {self.config['host']}:{self.config['port']}")
             
             while self.running:
                 try:
@@ -840,26 +630,22 @@ class TeltonikaService:
                     )
                     client_thread.start()
                     
-                except socket.error as e:
-                    if self.running:
-                        self.logger.error(f"Socket error: {e}")
+                except socket.error:
+                    pass
                 
-        except Exception as e:
-            self.logger.error(f"Server error: {e}")
+        except:
+            pass
         finally:
             self.stop_server()
     
     def stop_server(self):
         """Stop the server gracefully"""
-        self.logger.info("Stopping Teltonika Service...")
         self.running = False
         if self.server_socket:
             self.server_socket.close()
-        self.logger.info("Teltonika Service stopped")
     
     def signal_handler(self, signum, frame):
         """Handle system signals"""
-        self.logger.info(f"Received signal {signum}, shutting down...")
         self.stop_server()
         sys.exit(0)
 
@@ -1159,62 +945,7 @@ class TeltonikaService:
         
         return decoded_params, unknown_params
 
-    def analyze_gps_structure(self, data, offset):
-        """Analyze GPS data structure from actual packet"""
-        try:
-            available_bytes = len(data) - offset
-            self.packet_logger.info(f"GPS Structure Analysis at offset {offset}:")
-            self.packet_logger.info(f"Available bytes: {available_bytes}")
-            
-            if available_bytes >= 15:
-                gps_bytes = data[offset:offset+15]
-                self.packet_logger.info(f"Full GPS data (15 bytes): {gps_bytes.hex()}")
-                
-                # Byte-by-byte breakdown
-                self.packet_logger.info("GPS byte breakdown:")
-                for i, byte in enumerate(gps_bytes):
-                    self.packet_logger.info(f"  GPS[{i:2d}]: 0x{byte:02X} ({byte:3d})")
-                
-                # Try different interpretations
-                self.packet_logger.info("Interpretation attempts:")
-                
-                # Standard Teltonika GPS format
-                try:
-                    longitude_raw = struct.unpack('!I', gps_bytes[0:4])[0]
-                    latitude_raw = struct.unpack('!I', gps_bytes[4:8])[0]
-                    altitude_raw = struct.unpack('!H', gps_bytes[8:10])[0]
-                    angle_raw = struct.unpack('!H', gps_bytes[10:12])[0]
-                    satellites_raw = gps_bytes[12]
-                    speed_raw = struct.unpack('!H', gps_bytes[13:15])[0]
-                    
-                    longitude_deg = longitude_raw / 10000000.0
-                    latitude_deg = latitude_raw / 10000000.0
-                    
-                    # Handle negative coordinates
-                    if longitude_raw > 0x80000000:
-                        longitude_deg = -(0x100000000 - longitude_raw) / 10000000.0
-                    if latitude_raw > 0x80000000:
-                        latitude_deg = -(0x100000000 - latitude_raw) / 10000000.0
-                    
-                    self.packet_logger.info(f"  Standard format:")
-                    self.packet_logger.info(f"    Longitude: {longitude_raw} -> {longitude_deg}°")
-                    self.packet_logger.info(f"    Latitude: {latitude_raw} -> {latitude_deg}°")
-                    self.packet_logger.info(f"    Altitude: {altitude_raw} m")
-                    self.packet_logger.info(f"    Angle: {angle_raw}°")
-                    self.packet_logger.info(f"    Satellites: {satellites_raw}")
-                    self.packet_logger.info(f"    Speed: {speed_raw} km/h")
-                    
-                except Exception as e:
-                    self.packet_logger.info(f"  Standard format failed: {e}")
-                
-            else:
-                gps_bytes = data[offset:offset+available_bytes]
-                self.packet_logger.info(f"Partial GPS data ({available_bytes} bytes): {gps_bytes.hex()}")
-                
-        except Exception as e:
-            self.packet_logger.error(f"GPS structure analysis failed: {e}")
-            
-        return None
+
 
     def extract_gps_coordinates(self, data, offset):
         """Extract GPS coordinates using the same method as GPS analysis"""
@@ -1249,8 +980,7 @@ class TeltonikaService:
                     'speed': speed_raw
                 }
             return None
-        except Exception as e:
-            self.logger.debug(f"GPS extraction failed: {e}")
+        except:
             return None
 
 def main():
@@ -1263,7 +993,6 @@ def main():
     try:
         service.start_server()
     except KeyboardInterrupt:
-        service.logger.info("Service interrupted by user")
         service.stop_server()
 
 if __name__ == "__main__":
