@@ -86,11 +86,31 @@ sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE teltonika TO teltonik
 
 # Configure PostgreSQL for performance
 echo "⚡ Configuring PostgreSQL for high performance..."
-PG_VERSION=$(sudo -u postgres psql -t -c "SELECT version();" | grep -oP '\d+\.\d+' | head -1)
+PG_VERSION=$(ls /etc/postgresql/ | head -1)
 PG_CONF="/etc/postgresql/$PG_VERSION/main/postgresql.conf"
 
+echo "📋 Detected PostgreSQL version: $PG_VERSION"
+echo "📋 Config file: $PG_CONF"
+
+# Check if config file exists
+if [ ! -f "$PG_CONF" ]; then
+    echo "❌ PostgreSQL config file not found at $PG_CONF"
+    echo "🔍 Available PostgreSQL versions:"
+    ls -la /etc/postgresql/
+    echo "🔍 Searching for postgresql.conf..."
+    find /etc/postgresql -name "postgresql.conf" -type f
+    PG_CONF=$(find /etc/postgresql -name "postgresql.conf" -type f | head -1)
+    echo "📋 Using config file: $PG_CONF"
+fi
+
 # Backup original config
-cp "$PG_CONF" "$PG_CONF.backup"
+if [ -f "$PG_CONF" ]; then
+    cp "$PG_CONF" "$PG_CONF.backup"
+    echo "✅ PostgreSQL config backed up"
+else
+    echo "❌ Cannot find PostgreSQL config file"
+    exit 1
+fi
 
 # Optimize for GPS data workload
 cat >> "$PG_CONF" << 'EOF'

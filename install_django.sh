@@ -116,13 +116,30 @@ sudo -u postgres psql -c "ALTER USER teltonika CREATEDB;"
 sudo -u postgres psql -d teltonika -c "CREATE EXTENSION IF NOT EXISTS postgis;"
 
 # Optimize PostgreSQL for GPS data
-PG_VERSION=$(sudo -u postgres psql -t -c "SELECT version();" | grep -oP '\d+\.\d+' | head -1)
+PG_VERSION=$(ls /etc/postgresql/ | head -1)
 PG_CONF="/etc/postgresql/$PG_VERSION/main/postgresql.conf"
 PG_HBA="/etc/postgresql/$PG_VERSION/main/pg_hba.conf"
 
+echo "📋 Detected PostgreSQL version: $PG_VERSION"
+echo "📋 Config file: $PG_CONF"
+
+# Check if config files exist
+if [ ! -f "$PG_CONF" ]; then
+    echo "🔍 Searching for postgresql.conf..."
+    PG_CONF=$(find /etc/postgresql -name "postgresql.conf" -type f | head -1)
+    PG_HBA=$(find /etc/postgresql -name "pg_hba.conf" -type f | head -1)
+    echo "📋 Using config file: $PG_CONF"
+fi
+
 # Backup original configs
-cp "$PG_CONF" "$PG_CONF.backup"
-cp "$PG_HBA" "$PG_HBA.backup"
+if [ -f "$PG_CONF" ]; then
+    cp "$PG_CONF" "$PG_CONF.backup"
+    echo "✅ PostgreSQL config backed up"
+fi
+if [ -f "$PG_HBA" ]; then
+    cp "$PG_HBA" "$PG_HBA.backup"
+    echo "✅ PostgreSQL HBA config backed up"
+fi
 
 # Configure PostgreSQL for high performance
 cat >> "$PG_CONF" << 'EOF'
