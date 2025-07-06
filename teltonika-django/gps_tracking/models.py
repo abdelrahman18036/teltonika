@@ -108,8 +108,8 @@ class IOParameter(models.Model):
         ('string', 'String'),
         ('hex', 'Hexadecimal'),
     ])
-    min_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    max_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    min_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    max_value = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

@@ -184,7 +184,7 @@ io_params = [
     {66: ("External Voltage", "decimal", "V", 0, 65535)},
     {67: ("Battery Voltage", "decimal", "V", 0, 65535)},
     {113: ("Battery Level", "integer", "%", 0, 100)},
-    {16: ("Total Odometer", "decimal", "km", 0, 2147483647)},
+    {16: ("Total Odometer", "decimal", "km", 0, 999999999)},
     {90: ("Door Status (CAN)", "integer", "", 0, 255)},
     {100: ("Program Number", "integer", "", 0, 65535)},
 ]
