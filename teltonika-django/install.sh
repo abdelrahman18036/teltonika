@@ -35,17 +35,39 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if running as root and handle accordingly
+# Check if running as root and handle user creation
 if [[ $EUID -eq 0 ]]; then
-    print_warning "Running as root. Setting up for root user deployment."
-    USER_HOME="/root"
-    WEB_USER="www-data"
-    CURRENT_USER="root"
-else
-    USER_HOME="$HOME"
-    WEB_USER="www-data"
-    CURRENT_USER=$(whoami)
+    print_status "Running as root. Creating teltonika user and switching to it..."
+    
+    # Create teltonika user if it doesn't exist
+    if ! id "teltonika" &>/dev/null; then
+        print_status "Creating teltonika user..."
+        useradd -m -s /bin/bash teltonika
+        usermod -aG sudo teltonika
+        print_status "User 'teltonika' created and added to sudo group"
+    else
+        print_warning "User 'teltonika' already exists"
+    fi
+    
+    # Copy project files to teltonika user home
+    print_status "Setting up project directory for teltonika user..."
+    if [[ -d "/home/teltonika/teltonika-django" ]]; then
+        print_warning "Project directory already exists, updating files..."
+        rm -rf /home/teltonika/teltonika-django
+    fi
+    
+    cp -r "$(pwd)" /home/teltonika/
+    chown -R teltonika:teltonika /home/teltonika/teltonika-django
+    chmod +x /home/teltonika/teltonika-django/install.sh
+    chmod +x /home/teltonika/teltonika-django/reset.sh
+    
+    print_status "Switching to teltonika user and continuing installation..."
+    exec su - teltonika -c "cd teltonika-django && ./install.sh"
 fi
+
+USER_HOME="$HOME"
+WEB_USER="www-data"
+CURRENT_USER=$(whoami)
 
 # Check if we're in the correct directory
 if [[ ! -f "manage.py" ]]; then
@@ -57,35 +79,19 @@ print_status "Starting installation process..."
 
 # Update system packages
 print_status "Updating system packages..."
-if [[ $EUID -eq 0 ]]; then
-    apt update && apt upgrade -y
-else
-    sudo apt update && sudo apt upgrade -y
-fi
+sudo apt update && sudo apt upgrade -y
 
 # Install system dependencies
 print_status "Installing system dependencies..."
-if [[ $EUID -eq 0 ]]; then
-    apt install -y \
-        postgresql postgresql-contrib \
-        python3 python3-pip python3-venv \
-        redis-server \
-        nginx \
-        supervisor \
-        git curl wget \
-        build-essential \
-        libpq-dev
-else
-    sudo apt install -y \
-        postgresql postgresql-contrib \
-        python3 python3-pip python3-venv \
-        redis-server \
-        nginx \
-        supervisor \
-        git curl wget \
-        build-essential \
-        libpq-dev
-fi
+sudo apt install -y \
+    postgresql postgresql-contrib \
+    python3 python3-pip python3-venv \
+    redis-server \
+    nginx \
+    supervisor \
+    git curl wget \
+    build-essential \
+    libpq-dev
 
 # Install Python dependencies
 print_status "Creating Python virtual environment..."
@@ -104,42 +110,31 @@ print_status "Setting up PostgreSQL database..."
 # Check if PostgreSQL is running
 if ! systemctl is-active --quiet postgresql; then
     print_status "Starting PostgreSQL service..."
-    if [[ $EUID -eq 0 ]]; then
-        systemctl start postgresql
-        systemctl enable postgresql
-    else
-        sudo systemctl start postgresql
-        sudo systemctl enable postgresql
-    fi
+    sudo systemctl start postgresql
+    sudo systemctl enable postgresql
 fi
 
 # Create database and user
 print_status "Creating database and user..."
-if [[ $EUID -eq 0 ]]; then
-    su - postgres -c "psql -c \"CREATE DATABASE $DB_NAME;\"" 2>/dev/null || print_warning "Database $DB_NAME already exists"
-    su - postgres -c "psql -c \"CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';\"" 2>/dev/null || print_warning "User $DB_USER already exists"
-    su - postgres -c "psql -c \"ALTER ROLE $DB_USER SET client_encoding TO 'utf8';\""
-    su - postgres -c "psql -c \"ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';\""
-    su - postgres -c "psql -c \"ALTER ROLE $DB_USER SET timezone TO 'UTC';\""
-    su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;\""
-else
-    sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;" 2>/dev/null || print_warning "Database $DB_NAME already exists"
-    sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || print_warning "User $DB_USER already exists"
-    sudo -u postgres psql -c "ALTER ROLE $DB_USER SET client_encoding TO 'utf8';"
-    sudo -u postgres psql -c "ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';"
-    sudo -u postgres psql -c "ALTER ROLE $DB_USER SET timezone TO 'UTC';"
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
-fi
+sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;" 2>/dev/null || print_warning "Database $DB_NAME already exists"
+sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || print_warning "User $DB_USER already exists"
+sudo -u postgres psql -c "ALTER ROLE $DB_USER SET client_encoding TO 'utf8';"
+sudo -u postgres psql -c "ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';"
+sudo -u postgres psql -c "ALTER ROLE $DB_USER SET timezone TO 'UTC';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+
+# Fix PostgreSQL permissions for Django
+print_status "Setting up PostgreSQL permissions..."
+sudo -u postgres psql -d $DB_NAME -c "GRANT ALL PRIVILEGES ON SCHEMA public TO $DB_USER;"
+sudo -u postgres psql -d $DB_NAME -c "GRANT USAGE ON SCHEMA public TO $DB_USER;"
+sudo -u postgres psql -d $DB_NAME -c "GRANT CREATE ON SCHEMA public TO $DB_USER;"
+sudo -u postgres psql -d $DB_NAME -c "ALTER USER $DB_USER CREATEDB;"
+sudo -u postgres psql -d $DB_NAME -c "ALTER SCHEMA public OWNER TO $DB_USER;"
 
 # Setup Redis
 print_status "Setting up Redis..."
-if [[ $EUID -eq 0 ]]; then
-    systemctl start redis-server
-    systemctl enable redis-server
-else
-    sudo systemctl start redis-server
-    sudo systemctl enable redis-server
-fi
+sudo systemctl start redis-server
+sudo systemctl enable redis-server
 
 # Create environment file
 print_status "Creating environment configuration..."
@@ -160,8 +155,41 @@ python manage.py collectstatic --noinput
 
 # Run database migrations
 print_status "Running database migrations..."
-python manage.py makemigrations
+python manage.py makemigrations gps_tracking
 python manage.py migrate
+
+# Check if migrations were successful
+if [[ $? -ne 0 ]]; then
+    print_error "Database migrations failed. Trying to fix common issues..."
+    
+    # Try to fix the numeric field overflow issue
+    print_status "Applying manual fixes for database schema..."
+    python manage.py shell << 'EOF'
+import os
+import django
+from django.db import connection
+
+# Try to drop and recreate problematic tables if they exist
+with connection.cursor() as cursor:
+    try:
+        cursor.execute("DROP TABLE IF EXISTS io_parameters CASCADE;")
+        print("Dropped io_parameters table")
+    except Exception as e:
+        print(f"Could not drop io_parameters table: {e}")
+        
+    try:
+        cursor.execute("DROP TABLE IF EXISTS gps_records CASCADE;")
+        print("Dropped gps_records table")
+    except Exception as e:
+        print(f"Could not drop gps_records table: {e}")
+        
+print("Manual fixes applied")
+EOF
+
+    # Try migrations again
+    print_status "Retrying database migrations..."
+    python manage.py migrate
+fi
 
 # Create superuser
 print_status "Creating Django superuser..."
@@ -207,27 +235,7 @@ EOF
 
 # Create systemd service file
 print_status "Creating systemd service..."
-if [[ $EUID -eq 0 ]]; then
-    tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
-[Unit]
-Description=Teltonika Django GPS Tracker
-After=network.target postgresql.service redis.service
-
-[Service]
-Type=exec
-User=root
-Group=root
-WorkingDirectory=$(pwd)
-Environment=PATH=$(pwd)/venv/bin
-ExecStart=$(pwd)/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:$DJANGO_PORT teltonika_tracker.wsgi:application
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-else
-    sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
+sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
 [Unit]
 Description=Teltonika Django GPS Tracker
 After=network.target postgresql.service redis.service
@@ -245,15 +253,10 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-fi
 
 # Create nginx configuration
 print_status "Creating Nginx configuration..."
-if [[ $EUID -eq 0 ]]; then
-    tee /etc/nginx/sites-available/teltonika-django > /dev/null << EOF
-else
-    sudo tee /etc/nginx/sites-available/teltonika-django > /dev/null << EOF
-fi
+sudo tee /etc/nginx/sites-available/teltonika-django > /dev/null << EOF
 server {
     listen 80;
     server_name localhost;
@@ -274,44 +277,24 @@ EOF
 
 # Enable nginx site
 if [[ ! -L "/etc/nginx/sites-enabled/teltonika-django" ]]; then
-    if [[ $EUID -eq 0 ]]; then
-        ln -s /etc/nginx/sites-available/teltonika-django /etc/nginx/sites-enabled/
-    else
-        sudo ln -s /etc/nginx/sites-available/teltonika-django /etc/nginx/sites-enabled/
-    fi
+    sudo ln -s /etc/nginx/sites-available/teltonika-django /etc/nginx/sites-enabled/
 fi
 
 # Test nginx configuration
-if [[ $EUID -eq 0 ]]; then
-    nginx -t
-else
-    sudo nginx -t
-fi
+sudo nginx -t
 
 # Create log directories
 print_status "Creating log directories..."
 mkdir -p logs
-if [[ $EUID -eq 0 ]]; then
-    mkdir -p /var/log/teltonika-django
-    chown root:root /var/log/teltonika-django
-else
-    sudo mkdir -p /var/log/teltonika-django
-    sudo chown $(whoami):$(whoami) /var/log/teltonika-django
-fi
+sudo mkdir -p /var/log/teltonika-django
+sudo chown $(whoami):$(whoami) /var/log/teltonika-django
 
 # Enable and start services
 print_status "Enabling and starting services..."
-if [[ $EUID -eq 0 ]]; then
-    systemctl daemon-reload
-    systemctl enable $SERVICE_NAME
-    systemctl start $SERVICE_NAME
-    systemctl reload nginx
-else
-    sudo systemctl daemon-reload
-    sudo systemctl enable $SERVICE_NAME
-    sudo systemctl start $SERVICE_NAME
-    sudo systemctl reload nginx
-fi
+sudo systemctl daemon-reload
+sudo systemctl enable $SERVICE_NAME
+sudo systemctl start $SERVICE_NAME
+sudo systemctl reload nginx
 
 # Create integration patch for existing Teltonika service
 print_status "Creating integration patch for existing Teltonika service..."
@@ -392,13 +375,8 @@ EOF
 
 # Set permissions
 print_status "Setting permissions..."
-if [[ $EUID -eq 0 ]]; then
-    chown -R root:root .
-    chmod -R 755 .
-else
-    sudo chown -R $(whoami):www-data .
-    sudo chmod -R 755 .
-fi
+sudo chown -R $(whoami):www-data .
+sudo chmod -R 755 .
 
 # Final status check
 print_status "Checking service status..."
