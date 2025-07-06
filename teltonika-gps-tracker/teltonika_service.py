@@ -899,8 +899,60 @@ class TeltonikaService:
                     formatted_value = f"{value}%"
                 elif io_id in [86, 104, 106, 108]:  # BLE Humidity (2 bytes, %RH)
                     formatted_value = f"{value/10:.1f}%RH"
+                elif io_id == 90:  # Door Status (CAN) - bit field
+                    door_statuses = []
+                    if value & 0x01: door_statuses.append("Driver Door Open")
+                    if value & 0x02: door_statuses.append("Passenger Door Open")
+                    if value & 0x04: door_statuses.append("Rear Left Door Open")
+                    if value & 0x08: door_statuses.append("Rear Right Door Open")
+                    if value & 0x10: door_statuses.append("Trunk Open")
+                    if value & 0x20: door_statuses.append("Hood Open")
+                    formatted_value = ", ".join(door_statuses) if door_statuses else "All Doors Closed"
+                elif io_id == 100:  # Program Number
+                    formatted_value = f"Program #{value}"
+                elif io_id in [11, 14]:  # ICCID1/ICCID2 (8 bytes, SIM card ID) - convert from hex
+                    # Convert to full ICCID format
+                    formatted_value = f"{value:016X}"
+                elif io_id == 237:  # Network Type (1 byte, 0-1)
+                    network_types = {0: "GSM", 1: "LTE"}
+                    formatted_value = network_types.get(value, f"Network Type {value}")
+                elif io_id == 263:  # BT Status (1 byte, 0-4)
+                    bt_statuses = {0: "Off", 1: "Enabled", 2: "Connected", 3: "Disconnected", 4: "Error"}
+                    formatted_value = bt_statuses.get(value, f"BT Status {value}")
+                elif io_id == 303:  # Instant Movement (1 byte, 0-1)
+                    formatted_value = "Moving" if value else "Stationary"
+                elif io_id == 381:  # Ground Sense (1 byte, 0-1)
+                    formatted_value = "Grounded" if value else "Not Grounded"
+                elif io_id == 383:  # AXL Calibration Status (1 byte, 0-3)
+                    cal_statuses = {0: "Not Calibrated", 1: "Calibration In Progress", 2: "Calibrated", 3: "Calibration Error"}
+                    formatted_value = cal_statuses.get(value, f"Calibration Status {value}")
+                elif io_id == 637:  # Wake Reason (1 byte, 0-1)
+                    wake_reasons = {0: "Normal", 1: "Movement"}
+                    formatted_value = wake_reasons.get(value, f"Wake Reason {value}")
+                elif io_id in [451, 452, 453, 454]:  # BLE RFID (8 bytes, HEX)
+                    formatted_value = f"0x{value:016X}"
+                elif io_id in [455, 456, 457, 458, 459, 460, 461, 462]:  # BLE Button states
+                    formatted_value = "Pressed" if value else "Released"
                 elif io_id in [622, 623]:  # Frequency DIN (2 bytes, Hz)
                     formatted_value = f"{value} Hz"
+                elif io_id == 10:  # SD Status (1 byte, 0-1)
+                    formatted_value = "SD Card Present" if value else "No SD Card"
+                elif io_id == 78:  # iButton (8 bytes, HEX)
+                    formatted_value = f"0x{value:016X}"
+                elif io_id == 207:  # RFID (8 bytes, HEX)
+                    formatted_value = f"0x{value:016X}"
+                elif io_id == 238:  # User ID (8 bytes)
+                    formatted_value = f"User ID: {value}"
+                elif io_id == 387:  # ISO6709 Coordinates (34 bytes, HEX)
+                    formatted_value = f"ISO6709: 0x{value}"
+                elif io_id == 636:  # UMTS/LTE Cell ID (4 bytes)
+                    formatted_value = f"Cell ID: {value}"
+                elif io_id == 1148:  # Connectivity quality (4 bytes)
+                    formatted_value = f"Quality: {value}"
+                elif io_id == 256:  # VIN (variable length, ASCII)
+                    formatted_value = f"VIN: {value}"
+                elif io_id == 264:  # Barcode ID (variable length, ASCII)
+                    formatted_value = f"Barcode: {value}"
                 elif io_id in [82]:  # Accelerator Pedal Position (1 byte, %)
                     formatted_value = f"{value}%"
                 elif io_id in [84, 112]:  # Fuel Level CAN (2 bytes, L)
