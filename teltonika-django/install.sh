@@ -35,10 +35,16 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Check if running as root
+# Check if running as root and handle accordingly
 if [[ $EUID -eq 0 ]]; then
-    print_error "This script should not be run as root. Please run as a regular user with sudo privileges."
-    exit 1
+    print_warning "Running as root. Setting up for root user deployment."
+    USER_HOME="/root"
+    WEB_USER="www-data"
+    CURRENT_USER="root"
+else
+    USER_HOME="$HOME"
+    WEB_USER="www-data"
+    CURRENT_USER=$(whoami)
 fi
 
 # Check if we're in the correct directory
@@ -51,19 +57,35 @@ print_status "Starting installation process..."
 
 # Update system packages
 print_status "Updating system packages..."
-sudo apt update && sudo apt upgrade -y
+if [[ $EUID -eq 0 ]]; then
+    apt update && apt upgrade -y
+else
+    sudo apt update && sudo apt upgrade -y
+fi
 
 # Install system dependencies
 print_status "Installing system dependencies..."
-sudo apt install -y \
-    postgresql postgresql-contrib \
-    python3 python3-pip python3-venv \
-    redis-server \
-    nginx \
-    supervisor \
-    git curl wget \
-    build-essential \
-    libpq-dev
+if [[ $EUID -eq 0 ]]; then
+    apt install -y \
+        postgresql postgresql-contrib \
+        python3 python3-pip python3-venv \
+        redis-server \
+        nginx \
+        supervisor \
+        git curl wget \
+        build-essential \
+        libpq-dev
+else
+    sudo apt install -y \
+        postgresql postgresql-contrib \
+        python3 python3-pip python3-venv \
+        redis-server \
+        nginx \
+        supervisor \
+        git curl wget \
+        build-essential \
+        libpq-dev
+fi
 
 # Install Python dependencies
 print_status "Creating Python virtual environment..."
@@ -82,23 +104,42 @@ print_status "Setting up PostgreSQL database..."
 # Check if PostgreSQL is running
 if ! systemctl is-active --quiet postgresql; then
     print_status "Starting PostgreSQL service..."
-    sudo systemctl start postgresql
-    sudo systemctl enable postgresql
+    if [[ $EUID -eq 0 ]]; then
+        systemctl start postgresql
+        systemctl enable postgresql
+    else
+        sudo systemctl start postgresql
+        sudo systemctl enable postgresql
+    fi
 fi
 
 # Create database and user
 print_status "Creating database and user..."
-sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;" 2>/dev/null || print_warning "Database $DB_NAME already exists"
-sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || print_warning "User $DB_USER already exists"
-sudo -u postgres psql -c "ALTER ROLE $DB_USER SET client_encoding TO 'utf8';"
-sudo -u postgres psql -c "ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';"
-sudo -u postgres psql -c "ALTER ROLE $DB_USER SET timezone TO 'UTC';"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+if [[ $EUID -eq 0 ]]; then
+    su - postgres -c "psql -c \"CREATE DATABASE $DB_NAME;\"" 2>/dev/null || print_warning "Database $DB_NAME already exists"
+    su - postgres -c "psql -c \"CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';\"" 2>/dev/null || print_warning "User $DB_USER already exists"
+    su - postgres -c "psql -c \"ALTER ROLE $DB_USER SET client_encoding TO 'utf8';\""
+    su - postgres -c "psql -c \"ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';\""
+    su - postgres -c "psql -c \"ALTER ROLE $DB_USER SET timezone TO 'UTC';\""
+    su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;\""
+else
+    sudo -u postgres psql -c "CREATE DATABASE $DB_NAME;" 2>/dev/null || print_warning "Database $DB_NAME already exists"
+    sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || print_warning "User $DB_USER already exists"
+    sudo -u postgres psql -c "ALTER ROLE $DB_USER SET client_encoding TO 'utf8';"
+    sudo -u postgres psql -c "ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';"
+    sudo -u postgres psql -c "ALTER ROLE $DB_USER SET timezone TO 'UTC';"
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+fi
 
 # Setup Redis
 print_status "Setting up Redis..."
-sudo systemctl start redis-server
-sudo systemctl enable redis-server
+if [[ $EUID -eq 0 ]]; then
+    systemctl start redis-server
+    systemctl enable redis-server
+else
+    sudo systemctl start redis-server
+    sudo systemctl enable redis-server
+fi
 
 # Create environment file
 print_status "Creating environment configuration..."
@@ -166,7 +207,27 @@ EOF
 
 # Create systemd service file
 print_status "Creating systemd service..."
-sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
+if [[ $EUID -eq 0 ]]; then
+    tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
+[Unit]
+Description=Teltonika Django GPS Tracker
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=exec
+User=root
+Group=root
+WorkingDirectory=$(pwd)
+Environment=PATH=$(pwd)/venv/bin
+ExecStart=$(pwd)/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:$DJANGO_PORT teltonika_tracker.wsgi:application
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+else
+    sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
 [Unit]
 Description=Teltonika Django GPS Tracker
 After=network.target postgresql.service redis.service
@@ -184,10 +245,15 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
+fi
 
 # Create nginx configuration
 print_status "Creating Nginx configuration..."
-sudo tee /etc/nginx/sites-available/teltonika-django > /dev/null << EOF
+if [[ $EUID -eq 0 ]]; then
+    tee /etc/nginx/sites-available/teltonika-django > /dev/null << EOF
+else
+    sudo tee /etc/nginx/sites-available/teltonika-django > /dev/null << EOF
+fi
 server {
     listen 80;
     server_name localhost;
@@ -208,25 +274,44 @@ EOF
 
 # Enable nginx site
 if [[ ! -L "/etc/nginx/sites-enabled/teltonika-django" ]]; then
-    sudo ln -s /etc/nginx/sites-available/teltonika-django /etc/nginx/sites-enabled/
+    if [[ $EUID -eq 0 ]]; then
+        ln -s /etc/nginx/sites-available/teltonika-django /etc/nginx/sites-enabled/
+    else
+        sudo ln -s /etc/nginx/sites-available/teltonika-django /etc/nginx/sites-enabled/
+    fi
 fi
 
 # Test nginx configuration
-sudo nginx -t
+if [[ $EUID -eq 0 ]]; then
+    nginx -t
+else
+    sudo nginx -t
+fi
 
 # Create log directories
 print_status "Creating log directories..."
 mkdir -p logs
-sudo mkdir -p /var/log/teltonika-django
-sudo chown $(whoami):$(whoami) /var/log/teltonika-django
+if [[ $EUID -eq 0 ]]; then
+    mkdir -p /var/log/teltonika-django
+    chown root:root /var/log/teltonika-django
+else
+    sudo mkdir -p /var/log/teltonika-django
+    sudo chown $(whoami):$(whoami) /var/log/teltonika-django
+fi
 
 # Enable and start services
 print_status "Enabling and starting services..."
-sudo systemctl daemon-reload
-sudo systemctl enable $SERVICE_NAME
-sudo systemctl start $SERVICE_NAME
-
-sudo systemctl reload nginx
+if [[ $EUID -eq 0 ]]; then
+    systemctl daemon-reload
+    systemctl enable $SERVICE_NAME
+    systemctl start $SERVICE_NAME
+    systemctl reload nginx
+else
+    sudo systemctl daemon-reload
+    sudo systemctl enable $SERVICE_NAME
+    sudo systemctl start $SERVICE_NAME
+    sudo systemctl reload nginx
+fi
 
 # Create integration patch for existing Teltonika service
 print_status "Creating integration patch for existing Teltonika service..."
@@ -307,8 +392,13 @@ EOF
 
 # Set permissions
 print_status "Setting permissions..."
-sudo chown -R $(whoami):www-data .
-sudo chmod -R 755 .
+if [[ $EUID -eq 0 ]]; then
+    chown -R root:root .
+    chmod -R 755 .
+else
+    sudo chown -R $(whoami):www-data .
+    sudo chmod -R 755 .
+fi
 
 # Final status check
 print_status "Checking service status..."
