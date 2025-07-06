@@ -865,83 +865,173 @@ class TeltonikaService:
 
     def decode_io_parameters(self, io_data):
         """Decode and explain IO parameters from Teltonika devices"""
-        
-        # Known IO parameter meanings for Teltonika devices
         io_meanings = {
-            # Digital Inputs (common for physical inputs)
-            1: "Digital Input 1",
-            2: "Digital Input 2",
-            3: "Digital Input 3",
-            4: "Digital Input 4",
-
-            # Analog Inputs (measure voltage)
-            9: "Analog Input 1 (mV)",
-            10: "Analog Input 2 (mV)",
-            11: "Analog Input 3 (mV)",
-            12: "Analog Input 4 (mV)",
-
-            # Vehicle/Device Status Data
-            21: "GSM Signal Strength", # Typically 0-5
-            24: "Speed (km/h)", # GNSS-derived speed
-            66: "External Voltage (mV)", # Main power supply
-            67: "Internal Battery Voltage (mV)", # Device's internal backup battery
-            69: "GNSS Status", # E.g., 0=Off, 3=Working (has fix)
-            72: "Dallas Temperature 1 (°C)", # Multiplied by 10 (e.g., 250 for 25°C)
-            73: "Dallas Temperature 2 (°C)",
-            74: "Dallas Temperature 3 (°C)",
-            75: "Dallas Temperature 4 (°C)",
-            78: "iButton ID",
-            80: "Data Mode", # E.g., 0=Home On Stop, 1=Home On Moving
-            113: "Internal Battery Level (%)", # Percentage of internal battery charge
-
-            # Engine/OBD Data (requires OBD-II dongle/integration)
-            179: "Engine RPM (OBD)",
-            180: "Vehicle Speed (OBD)", # From OBD-II, potentially more accurate than GNSS speed at low speeds
-            181: "Fuel Level (OBD) (%)",
-            182: "Engine Coolant Temperature (OBD)",
-            183: "Engine Load (OBD) (%)",
-            184: "Manifold Absolute Pressure (OBD)",
-            185: "Throttle Position (OBD) (%)",
-            186: "Fuel Rate (OBD) (L/h)",
-            187: "Total Mileage (OBD) (km)",
-            188: "Fuel Consumption (OBD) (L/100km)",
-
-            # Core Status Parameters
-            239: "Ignition Status", # 0=Off, 1=On
-            240: "Movement Status", # 0=Not Moving, 1=Moving (based on accelerometer)
+            # Permanent I/O Elements - Core Status
+            239: "Ignition",
+            240: "Movement", 
+            80: "Data Mode",
+            21: "GSM Signal",
+            200: "Sleep Mode",
+            69: "GNSS Status",
+            181: "GNSS PDOP",
+            182: "GNSS HDOP",
+            66: "External Voltage",
+            24: "Speed",
+            205: "GSM Cell ID",
+            206: "GSM Area Code",
+            67: "Battery Voltage",
+            68: "Battery Current",
             241: "Active GSM Operator",
-
-            # Digital Outputs (for controlling external devices)
-            216: "Digital Output 1",
-            217: "Digital Output 2",
-
-            # CAN Bus Data (requires specific CAN adapter and vehicle support)
-            385: "CAN Speed (km/h)",
-            386: "CAN RPM",
-            387: "CAN Fuel Level (%)",
-
-            # Extended Parameters (Green Driving, Security, Trip)
-            389: "Harsh Acceleration",
-            390: "Harsh Braking",
-            391: "Harsh Cornering",
-            392: "Crash Detection",
-            393: "Jamming Detection",
-            394: "Trip Distance (m)", # Often distance of current trip segment
-            395: "Overspeeding",
-
-            # Vehicle specific / Advanced CAN data (highly dependent on model, CAN adapter, and vehicle)
-            400: "Door Status",
-            401: "Window Status",
-            402: "Lights Status",
-            403: "Air Conditioning Status",
-            404: "Seat Belt Status",
-            405: "Emergency Button", # Often a specific Digital Input used for this function
+            199: "Trip Odometer",
+            16: "Total Odometer",
             
-            # Additional common parameters
-            68: "Battery Current (mA)",
-            14: "OBD Diagnostic Trouble Codes",
-            16: "Total Distance (m)",
-            380: "BLE Sensor Data",
+            # Digital/Analog Inputs
+            1: "Digital Input 1",
+            2: "Digital Input 2", 
+            3: "Digital Input 3",
+            9: "Analog Input 1",
+            6: "Analog Input 2",
+            179: "Digital Output 1",
+            180: "Digital Output 2",
+            380: "Digital output 3",
+            381: "Ground Sense",
+            
+            # Fuel and GPS Data
+            12: "Fuel Used GPS",
+            13: "Fuel Rate GPS",
+            
+            # Accelerometer
+            17: "Axis X",
+            18: "Axis Y", 
+            19: "Axis Z",
+            
+            # Device Info
+            11: "ICCID1",
+            14: "ICCID2",
+            10: "SD Status",
+            113: "Battery Level",
+            238: "User ID",
+            237: "Network Type",
+            
+            # Pulse Counters
+            4: "Pulse Counter Din1",
+            5: "Pulse Counter Din2",
+            
+            # Bluetooth
+            263: "BT Status",
+            264: "Barcode ID",
+            
+            # Movement Detection
+            303: "Instant Movement",
+            
+            # Temperature Sensors (Dallas)
+            72: "Dallas Temperature 1",
+            73: "Dallas Temperature 2", 
+            74: "Dallas Temperature 3",
+            75: "Dallas Temperature 4",
+            76: "Dallas Temperature ID 1",
+            77: "Dallas Temperature ID 2",
+            79: "Dallas Temperature ID 3", 
+            71: "Dallas Temperature ID 4",
+            78: "iButton",
+            207: "RFID",
+            
+            # Liquid Level Sensors
+            201: "LLS 1 Fuel Level",
+            202: "LLS 1 Temperature",
+            203: "LLS 2 Fuel Level", 
+            204: "LLS 2 Temperature",
+            210: "LLS 3 Fuel Level",
+            211: "LLS 3 Temperature",
+            212: "LLS 4 Fuel Level",
+            213: "LLS 4 Temperature", 
+            214: "LLS 5 Fuel Level",
+            215: "LLS 5 Temperature",
+            
+            # Performance
+            15: "Eco Score",
+            
+            # Sensor Data
+            327: "UL202-02 Sensor Fuel level",
+            483: "UL202-02 Sensor Status",
+            
+            # Position Data
+            387: "ISO6709 Coordinates",
+            636: "UMTS/LTE Cell ID",
+            
+            # Driver Data  
+            403: "Driver Name",
+            404: "Driver card license type",
+            405: "Driver Gender",
+            406: "Driver Card ID",
+            407: "Driver card expiration date", 
+            408: "Driver Card place of issue",
+            409: "Driver Status Event",
+            
+            # Speed Sensor
+            329: "AIN Speed",
+            
+            # MSP500 Data
+            500: "MSP500 vendor name",
+            501: "MSP500 vehicle number",
+            502: "MSP500 speed sensor",
+            
+            # Wake Reason
+            637: "Wake Reason",
+            
+            # EYE Sensor Data (Temperature, Humidity, etc.)
+            10800: "EYE Temperature 1", 10801: "EYE Temperature 2", 10802: "EYE Temperature 3", 10803: "EYE Temperature 4",
+            10804: "EYE Humidity 1", 10805: "EYE Humidity 2", 10806: "EYE Humidity 3", 10807: "EYE Humidity 4", 
+            10808: "EYE Magnet 1", 10809: "EYE Magnet 2", 10810: "EYE Magnet 3", 10811: "EYE Magnet 4",
+            10812: "EYE Movement 1", 10813: "EYE Movement 2", 10814: "EYE Movement 3", 10815: "EYE Movement 4",
+            10816: "EYE Pitch 1", 10817: "EYE Pitch 2", 10818: "EYE Pitch 3", 10819: "EYE Pitch 4",
+            10820: "EYE Low Battery 1", 10821: "EYE Low Battery 2", 10822: "EYE Low Battery 3", 10823: "EYE Low Battery 4",
+            10824: "EYE Battery Voltage 1", 10825: "EYE Battery Voltage 2", 10826: "EYE Battery Voltage 3", 10827: "EYE Battery Voltage 4",
+            10832: "EYE Roll 1", 10833: "EYE Roll 2", 10834: "EYE Roll 3", 10835: "EYE Roll 4",
+            10836: "EYE Movement count 1", 10837: "EYE Movement count 2", 10838: "EYE Movement count 3", 10839: "EYE Movement count 4",
+            10840: "EYE Magnet count 1", 10841: "EYE Magnet count 2", 10842: "EYE Magnet count 3", 10843: "EYE Magnet count 4",
+            
+            # Calibration
+            383: "AXL Calibration Status",
+            
+            # BLE RFID and Buttons
+            451: "BLE RFID #1", 452: "BLE RFID #2", 453: "BLE RFID #3", 454: "BLE RFID #4",
+            455: "BLE Button 1 state #1", 456: "BLE Button 1 state #2", 457: "BLE Button 1 state #3", 458: "BLE Button 1 state #4",
+            459: "BLE Button 2 state #1", 460: "BLE Button 2 state #2", 461: "BLE Button 2 state #3", 462: "BLE Button 2 state #4",
+            
+            # Frequency
+            622: "Frequency DIN1", 623: "Frequency DIN2",
+            
+            # Connectivity
+            1148: "Connectivity quality",
+            
+            # OBD Elements
+            256: "VIN", 30: "Number of DTC", 31: "Engine Load", 32: "Coolant Temperature", 33: "Short Fuel Trim",
+            34: "Fuel pressure", 35: "Intake MAP", 36: "Engine RPM", 37: "Vehicle Speed", 38: "Timing Advance",
+            39: "Intake Air Temperature", 40: "MAF", 41: "Throttle Position", 42: "Runtime since engine start",
+            43: "Distance Traveled MIL On", 44: "Relative Fuel Rail Pressure", 45: "Direct Fuel Rail Pressure",
+            46: "Commanded EGR", 47: "EGR Error", 48: "Fuel Level", 49: "Distance Since Codes Clear",
+            50: "Barometic Pressure", 51: "Control Module Voltage", 52: "Absolute Load Value", 759: "Fuel Type",
+            53: "Ambient Air Temperature", 54: "Time Run With MIL On", 55: "Time Since Codes Cleared",
+            56: "Absolute Fuel Rail Pressure", 57: "Hybrid battery pack life", 58: "Engine Oil Temperature",
+            59: "Fuel injection timing", 540: "Throttle position group", 541: "Commanded Equivalence R",
+            542: "Intake MAP 2 bytes", 543: "Hybrid System Voltage", 544: "Hybrid System Current",
+            281: "Fault Codes", 60: "Fuel Rate",
+            
+            # BLE Sensors
+            25: "BLE Temperature #1", 26: "BLE Temperature #2", 27: "BLE Temperature #3", 28: "BLE Temperature #4",
+            29: "BLE Battery #1", 20: "BLE Battery #2", 22: "BLE Battery #3", 23: "BLE Battery #4",
+            86: "BLE Humidity #1", 104: "BLE Humidity #2", 106: "BLE Humidity #3", 108: "BLE Humidity #4",
+            270: "BLE Fuel Level #1", 273: "BLE Fuel Level #2", 276: "BLE Fuel Level #3", 279: "BLE Fuel Level #4",
+            385: "Beacon",
+            
+            # CAN Bus Data (LVCAN200, ALLCAN300, CANCONTROL)
+            81: "Vehicle Speed (CAN)", 82: "Accelerator Pedal Position", 83: "Fuel Consumed (CAN)", 
+            84: "Fuel Level (CAN)", 85: "Engine RPM (CAN)", 87: "Total Mileage (CAN)", 89: "Fuel level (CAN %)",
+            90: "Door Status (CAN)", 100: "Program Number", 101: "Module ID 8B", 388: "Module ID 17B",
+            102: "Engine Worktime", 103: "Engine Worktime (counted)", 105: "Total Mileage (counted)",
+            107: "Fuel Consumed (counted)", 110: "Fuel Rate (CAN)", 111: "AdBlue Level (%)",
+            112: "AdBlue Level (L)", 114: "Engine Load (CAN)", 115: "Engine Temperature",
         }
         
         decoded_params = []
@@ -951,54 +1041,115 @@ class TeltonikaService:
             if io_id in io_meanings:
                 param_name = io_meanings[io_id]
                 
-                # Format values based on parameter type
-                if io_id in [66, 67]:  # Voltage in mV
+                # Format values based on parameter type and CSV specifications
+                if io_id in [66, 67]:  # External/Battery Voltage (2 bytes, V)
                     formatted_value = f"{value/1000:.2f}V"
-                elif io_id in [9, 10, 11, 12]:  # Analog inputs in mV
-                    formatted_value = f"{value}mV"
-                elif io_id == 113:  # Battery percentage
+                elif io_id == 68:  # Battery Current (2 bytes, A) - but typically in mA
+                    formatted_value = f"{value}mA" 
+                elif io_id in [9, 6]:  # Analog Input 1&2 (2 bytes, V)
+                    formatted_value = f"{value/1000:.2f}V"
+                elif io_id == 113:  # Battery Level (1 byte, %)
                     formatted_value = f"{value}%"
-                elif io_id == 21:  # Signal strength (0-5 scale)
+                elif io_id == 21:  # GSM Signal (1 byte, 0-5 scale)
                     formatted_value = f"{value}/5"
-                elif io_id in [24, 180, 385]:  # Speed in km/h
+                elif io_id in [24, 37, 81]:  # Speed (2 bytes, km/h)
                     formatted_value = f"{value} km/h"
-                elif io_id in [179, 386]:  # RPM
+                elif io_id in [36, 85]:  # Engine RPM (2 bytes, rpm)
                     formatted_value = f"{value} RPM"
-                elif io_id in [181, 183, 185, 387]:  # Percentages (fuel, engine load, throttle, CAN fuel)
+                elif io_id in [31, 48, 89, 111, 114]:  # Engine Load, Fuel Level percentages (1 byte, %)
                     formatted_value = f"{value}%"
-                elif io_id in [72, 73, 74, 75]:  # Dallas temperature (multiplied by 10)
+                elif io_id in [72, 73, 74, 75]:  # Dallas Temperature (4 bytes, °C) - signed, -55.0 to 115.0
                     formatted_value = f"{value/10:.1f}°C"
-                elif io_id == 182:  # OBD Coolant temperature (offset by 40)
-                    formatted_value = f"{value-40}°C"
-                elif io_id == 186:  # Fuel rate L/h
+                elif io_id == 32:  # Coolant Temperature (1 byte, °C, signed -128 to 127)
+                    formatted_value = f"{value}°C"
+                elif io_id in [60, 110, 186]:  # Fuel Rate (2 bytes, L/h)
                     formatted_value = f"{value} L/h"
-                elif io_id in [187, 394]:  # Distance/mileage
-                    if io_id == 187:  # Total mileage in km
-                        formatted_value = f"{value} km"
-                    else:  # Trip distance in meters
-                        formatted_value = f"{value} m"
-                elif io_id == 16:  # Total distance in meters
+                elif io_id == 16:  # Total Odometer (4 bytes, no unit specified, but typically meters)
                     formatted_value = f"{value/1000:.1f} km"
-                elif io_id == 68:  # Battery current in mA
-                    formatted_value = f"{value}mA"
-                elif io_id == 188:  # Fuel consumption
-                    formatted_value = f"{value} L/100km"
-                elif io_id == 69:  # GNSS Status
+                elif io_id == 199:  # Trip Odometer (4 bytes, m)
+                    formatted_value = f"{value} m"
+                elif io_id in [87, 105]:  # Total Mileage CAN (4 bytes, m)
+                    formatted_value = f"{value/1000:.1f} km"
+                elif io_id == 69:  # GNSS Status (1 byte, 0-3)
                     gnss_status = {0: "Off", 1: "No Fix", 2: "2D Fix", 3: "3D Fix"}
                     formatted_value = gnss_status.get(value, f"Unknown({value})")
-                elif io_id == 80:  # Data Mode
-                    data_mode = {0: "Home On Stop", 1: "Home On Moving"}
-                    formatted_value = data_mode.get(value, f"Mode {value}")
-                elif io_id == 239:  # Ignition
+                elif io_id == 80:  # Data Mode (1 byte, 0-5)
+                    data_modes = {0: "Home On Stop", 1: "Home On Moving", 2: "Universal", 3: "Ping", 4: "Manual", 5: "Unknown"}
+                    formatted_value = data_modes.get(value, f"Mode {value}")
+                elif io_id == 200:  # Sleep Mode (1 byte, 0-4)
+                    sleep_modes = {0: "No Sleep", 1: "GPS Sleep", 2: "Deep Sleep", 3: "Ultra Deep Sleep", 4: "Online Deep Sleep"}
+                    formatted_value = sleep_modes.get(value, f"Sleep Mode {value}")
+                elif io_id == 239:  # Ignition (1 byte, 0-1)
                     formatted_value = "ON" if value else "OFF"
-                elif io_id == 240:  # Movement
+                elif io_id == 240:  # Movement (1 byte, 0-1)
                     formatted_value = "Moving" if value else "Stopped"
-                elif io_id in [1, 2, 3, 4, 216, 217]:  # Digital inputs/outputs
+                elif io_id in [1, 2, 3, 179, 180, 380]:  # Digital inputs/outputs (1 byte, 0-1)
                     formatted_value = "HIGH" if value else "LOW"
-                elif io_id in [389, 390, 391, 392, 393, 395]:  # Event flags
-                    formatted_value = "DETECTED" if value else "Normal"
-                elif io_id in [400, 401, 402, 403, 404, 405]:  # Vehicle status
-                    formatted_value = "ACTIVE" if value else "Inactive"
+                elif io_id in [181, 182]:  # GNSS PDOP/HDOP (2 bytes, 0-500)
+                    formatted_value = f"{value/100:.2f}"
+                elif io_id in [205, 206]:  # GSM Cell ID/Area Code (2 bytes)
+                    formatted_value = f"{value}"
+                elif io_id == 241:  # Active GSM Operator (4 bytes)
+                    formatted_value = f"{value}"
+                elif io_id in [12, 83, 107]:  # Fuel consumed (4 bytes, L)
+                    formatted_value = f"{value} L"
+                elif io_id in [13]:  # Fuel Rate GPS (2 bytes, L/100km)
+                    formatted_value = f"{value} L/100km"
+                elif io_id in [17, 18, 19]:  # Accelerometer Axis (2 bytes, mG, signed -8000 to 8000)
+                    formatted_value = f"{value} mG"
+                elif io_id in [4, 5]:  # Pulse Counter (4 bytes)
+                    formatted_value = f"{value} pulses"
+                elif io_id == 15:  # Eco Score (2 bytes)
+                    formatted_value = f"{value}"
+                elif io_id in [201, 203, 210, 212, 214]:  # LLS Fuel Level (2 bytes, kvants or ltr, signed)
+                    formatted_value = f"{value} L"
+                elif io_id in [202, 204, 211, 213, 215]:  # LLS Temperature (1 byte, °C, signed -128 to 127)
+                    formatted_value = f"{value}°C"
+                elif io_id == 327:  # UL202-02 Sensor Fuel level (2 bytes, mm, signed)
+                    formatted_value = f"{value} mm"
+                elif io_id in [25, 26, 27, 28]:  # BLE Temperature (2 bytes, °C, signed -40.00 to 125.00)
+                    formatted_value = f"{value/100:.2f}°C"
+                elif io_id in [29, 20, 22, 23]:  # BLE Battery (1 byte, %)
+                    formatted_value = f"{value}%"
+                elif io_id in [86, 104, 106, 108]:  # BLE Humidity (2 bytes, %RH)
+                    formatted_value = f"{value/10:.1f}%RH"
+                elif io_id in [622, 623]:  # Frequency DIN (2 bytes, Hz)
+                    formatted_value = f"{value} Hz"
+                elif io_id in [82]:  # Accelerator Pedal Position (1 byte, %)
+                    formatted_value = f"{value}%"
+                elif io_id in [84, 112]:  # Fuel Level CAN (2 bytes, L)
+                    formatted_value = f"{value} L"
+                elif io_id == 115:  # Engine Temperature (2 bytes, °C, signed -60.0 to 127.0)
+                    formatted_value = f"{value/10:.1f}°C"
+                elif io_id in [34, 35, 50]:  # Pressures (fuel, intake MAP, barometric) in kPa
+                    formatted_value = f"{value} kPa"
+                elif io_id in [39, 53]:  # Air temperatures (1 byte, °C, signed)
+                    formatted_value = f"{value}°C"
+                elif io_id == 40:  # MAF (2 bytes, g/sec)
+                    formatted_value = f"{value} g/sec"
+                elif io_id in [41, 540]:  # Throttle Position (1 byte, %)
+                    formatted_value = f"{value}%"
+                elif io_id in [42, 54, 55]:  # Runtime/Time values (2 bytes, s or min)
+                    if io_id == 42:
+                        formatted_value = f"{value} sec"
+                    else:
+                        formatted_value = f"{value} min"
+                elif io_id in [43, 49]:  
+                    formatted_value = f"{value} km"
+                elif io_id in [44, 45, 56]: 
+                    formatted_value = f"{value} kPa"
+                elif io_id in [46, 47]: 
+                    formatted_value = f"{value}%"
+                elif io_id == 51: 
+                    formatted_value = f"{value/1000:.2f}V"
+                elif io_id == 52:  
+                    formatted_value = f"{value/100:.1f}%"
+                elif io_id == 57: 
+                    formatted_value = f"{value}%"
+                elif io_id == 58:  
+                    formatted_value = f"{value}°C"
+                elif io_id == 59:  
+                    formatted_value = f"{value/100:.2f}°"
                 else:
                     formatted_value = str(value)
                     
