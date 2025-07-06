@@ -1412,3 +1412,4 @@ INFO 2025-07-06 23:30:54,970 basehttp 17588 26648 "POST /admin/gps_data/apilog/ 
 INFO 2025-07-06 23:30:57,040 basehttp 17588 26648 "POST /admin/gps_data/apilog/ HTTP/1.1" 302 0
 INFO 2025-07-06 23:30:57,107 basehttp 17588 26648 "GET /admin/gps_data/apilog/ HTTP/1.1" 200 11629
 INFO 2025-07-06 23:30:57,172 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-07 01:01:28,287 basehttp 17588 17652 - Broken pipe from ('127.0.0.1', 52642)
