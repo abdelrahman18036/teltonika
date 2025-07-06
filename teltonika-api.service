@@ -1,0 +1,30 @@
+[Unit]
+Description=Teltonika Django API Service
+After=network.target postgresql.service teltonika.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=teltonika
+Group=teltonika
+WorkingDirectory=/opt/teltonika
+Environment=PATH=/opt/teltonika/venv/bin
+Environment=DJANGO_SETTINGS_MODULE=teltonika_db.settings
+ExecStart=/opt/teltonika/venv/bin/python /opt/teltonika/django_api_service.py --production --port 8000
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=teltonika-api
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/teltonika /var/lib/teltonika
+
+[Install]
+WantedBy=multi-user.target 
