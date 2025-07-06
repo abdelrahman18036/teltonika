@@ -130,7 +130,36 @@ class DeviceStatusAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related('device')
 
 
-# API logs removed as requested by user
+@admin.register(APILog)
+class APILogAdmin(admin.ModelAdmin):
+    list_display = [
+        'timestamp', 'endpoint', 'method', 'status_code', 
+        'device_imei', 'request_size_kb', 'response_time_ms'
+    ]
+    list_filter = [
+        'method', 'status_code', 'timestamp', 'endpoint'
+    ]
+    search_fields = ['endpoint', 'device_imei', 'error_message']
+    readonly_fields = [
+        'timestamp', 'endpoint', 'method', 'status_code',
+        'device_imei', 'request_size', 'response_time', 'error_message'
+    ]
+    date_hierarchy = 'timestamp'
+    
+    def request_size_kb(self, obj):
+        if obj.request_size:
+            return f"{obj.request_size / 1024:.1f} KB"
+        return "N/A"
+    request_size_kb.short_description = 'Request Size'
+    
+    def response_time_ms(self, obj):
+        if obj.response_time:
+            return f"{obj.response_time * 1000:.0f} ms"
+        return "N/A"
+    response_time_ms.short_description = 'Response Time'
+    
+    def has_add_permission(self, request):
+        return False  # Don't allow manual creation of API logs
 
 
 # Customize admin site

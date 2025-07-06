@@ -1369,3 +1369,46 @@ INFO 2025-07-06 23:21:58,708 basehttp 20224 26524 "POST /admin/gps_data/device/ 
 INFO 2025-07-06 23:22:02,168 basehttp 20224 26524 "POST /admin/gps_data/device/ HTTP/1.1" 302 0
 INFO 2025-07-06 23:22:02,257 basehttp 20224 26524 "GET /admin/gps_data/device/ HTTP/1.1" 200 11137
 INFO 2025-07-06 23:22:02,313 basehttp 20224 26524 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:24:01,926 autoreload 20224 12560 D:\GitHub\teltonika\django\gps_data\models.py changed, reloading.
+INFO 2025-07-06 23:24:02,520 autoreload 28420 27872 Watching for file changes with StatReloader
+INFO 2025-07-06 23:29:28,078 autoreload 17588 28252 Watching for file changes with StatReloader
+INFO 2025-07-06 23:29:39,480 views 17588 17652 Received GPS data: 1 bytes
+INFO 2025-07-06 23:29:39,524 basehttp 17588 17652 "POST /api/gps/ HTTP/1.1" 200 100
+INFO 2025-07-06 23:29:41,057 views 17588 17652 Received GPS data: 50 bytes
+INFO 2025-07-06 23:29:41,158 basehttp 17588 17652 "POST /api/gps/ HTTP/1.1" 200 101
+INFO 2025-07-06 23:29:42,295 views 17588 17652 Received GPS data: 50 bytes
+INFO 2025-07-06 23:29:42,454 basehttp 17588 17652 "POST /api/gps/ HTTP/1.1" 200 102
+INFO 2025-07-06 23:29:47,018 views 17588 17652 Received GPS data: 50 bytes
+INFO 2025-07-06 23:29:47,189 basehttp 17588 17652 "POST /api/gps/ HTTP/1.1" 200 102
+INFO 2025-07-06 23:29:47,672 views 17588 17652 Received GPS data: 50 bytes
+INFO 2025-07-06 23:29:47,816 basehttp 17588 17652 "POST /api/gps/ HTTP/1.1" 200 102
+INFO 2025-07-06 23:29:48,291 views 17588 17652 Received GPS data: 50 bytes
+INFO 2025-07-06 23:29:48,412 basehttp 17588 17652 "POST /api/gps/ HTTP/1.1" 200 102
+INFO 2025-07-06 23:29:48,948 views 17588 17652 Received GPS data: 50 bytes
+INFO 2025-07-06 23:29:49,074 basehttp 17588 17652 "POST /api/gps/ HTTP/1.1" 200 102
+INFO 2025-07-06 23:29:54,130 views 17588 17652 Received GPS data: 9 bytes
+INFO 2025-07-06 23:29:54,207 basehttp 17588 17652 "POST /api/gps/ HTTP/1.1" 200 100
+INFO 2025-07-06 23:30:11,978 basehttp 17588 26648 "GET /admin/gps_data/device/ HTTP/1.1" 200 15115
+INFO 2025-07-06 23:30:12,029 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:13,374 basehttp 17588 26648 "GET /admin/gps_data/apilog/ HTTP/1.1" 200 55634
+INFO 2025-07-06 23:30:13,429 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:36,836 basehttp 17588 26648 "GET /admin/gps_data/gpsrecord/ HTTP/1.1" 200 93817
+INFO 2025-07-06 23:30:36,891 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:40,202 basehttp 17588 26648 "GET /admin/gps_data/device/ HTTP/1.1" 200 15115
+INFO 2025-07-06 23:30:40,260 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:43,767 basehttp 17588 26648 "POST /admin/gps_data/device/ HTTP/1.1" 200 56575
+INFO 2025-07-06 23:30:47,400 basehttp 17588 26648 "POST /admin/gps_data/device/ HTTP/1.1" 302 0
+INFO 2025-07-06 23:30:47,462 basehttp 17588 26648 "GET /admin/gps_data/device/ HTTP/1.1" 200 11468
+INFO 2025-07-06 23:30:47,628 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:48,487 basehttp 17588 26648 "GET /admin/gps_data/apilog/ HTTP/1.1" 200 55634
+INFO 2025-07-06 23:30:48,553 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:49,157 basehttp 17588 26648 "GET /admin/gps_data/devicestatus/ HTTP/1.1" 200 12517
+INFO 2025-07-06 23:30:49,218 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:49,884 basehttp 17588 26648 "GET /admin/gps_data/gpsrecord/ HTTP/1.1" 200 12765
+INFO 2025-07-06 23:30:49,939 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:50,516 basehttp 17588 26648 "GET /admin/gps_data/apilog/ HTTP/1.1" 200 55634
+INFO 2025-07-06 23:30:50,675 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
+INFO 2025-07-06 23:30:54,970 basehttp 17588 26648 "POST /admin/gps_data/apilog/ HTTP/1.1" 200 21698
+INFO 2025-07-06 23:30:57,040 basehttp 17588 26648 "POST /admin/gps_data/apilog/ HTTP/1.1" 302 0
+INFO 2025-07-06 23:30:57,107 basehttp 17588 26648 "GET /admin/gps_data/apilog/ HTTP/1.1" 200 11629
+INFO 2025-07-06 23:30:57,172 basehttp 17588 26648 "GET /admin/jsi18n/ HTTP/1.1" 200 3342
