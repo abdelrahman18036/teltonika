@@ -80,12 +80,48 @@ systemctl start postgresql
 systemctl enable postgresql
 
 # Create database and user
-sudo -u postgres psql -c "CREATE DATABASE IF NOT EXISTS teltonika;" 2>/dev/null || true
-sudo -u postgres psql -c "CREATE USER teltonika WITH PASSWORD 'teltonika123';" 2>/dev/null || true
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE teltonika TO teltonika;" 2>/dev/null || true
-sudo -u postgres psql -c "ALTER USER teltonika CREATEDB;" 2>/dev/null || true
+echo "Creating PostgreSQL database and user..."
+
+# Check if database exists, create if not
+DB_EXISTS=$(sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw teltonika; echo $?)
+if [ $DB_EXISTS -ne 0 ]; then
+    sudo -u postgres createdb teltonika
+    echo "✅ Database 'teltonika' created"
+else
+    echo "ℹ️  Database 'teltonika' already exists"
+fi
+
+# Check if user exists, create if not
+USER_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='teltonika'")
+if [ "$USER_EXISTS" != "1" ]; then
+    sudo -u postgres psql -c "CREATE USER teltonika WITH PASSWORD 'teltonika123';"
+    echo "✅ User 'teltonika' created"
+else
+    echo "ℹ️  User 'teltonika' already exists"
+fi
+
+# Grant privileges
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE teltonika TO teltonika;"
+sudo -u postgres psql -c "ALTER USER teltonika CREATEDB;"
+sudo -u postgres psql -d teltonika -c "GRANT ALL ON SCHEMA public TO teltonika;"
 
 echo "✅ PostgreSQL database configured"
+
+# Verify database was created successfully
+echo "🔍 Verifying database creation..."
+if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw teltonika; then
+    echo "✅ Database verification successful"
+else
+    echo "⚠️  Database verification failed, attempting manual creation..."
+    sudo -u postgres psql << EOF
+CREATE DATABASE teltonika;
+CREATE USER teltonika WITH PASSWORD 'teltonika123';
+GRANT ALL PRIVILEGES ON DATABASE teltonika TO teltonika;
+ALTER USER teltonika CREATEDB;
+\q
+EOF
+    echo "✅ Manual database creation completed"
+fi
 
 # Setup Redis
 echo "🔴 Setting up Redis..."
@@ -153,9 +189,36 @@ EOF
 
 chown teltonika:teltonika /opt/teltonika/django-app/.env
 
+# Test database connectivity
+echo "🔍 Testing database connectivity..."
+cd /opt/teltonika/django-app
+
+# Test database connection
+if sudo -u teltonika /opt/teltonika/django-app/venv/bin/python -c "
+import os
+import django
+from django.conf import settings
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'teltonika_tracker.settings')
+django.setup()
+from django.db import connection
+try:
+    cursor = connection.cursor()
+    cursor.execute('SELECT 1')
+    print('Database connection successful')
+except Exception as e:
+    print(f'Database connection failed: {e}')
+    exit(1)
+"; then
+    echo "✅ Database connection verified"
+else
+    echo "❌ Database connection failed"
+    echo "Checking PostgreSQL status..."
+    systemctl status postgresql --no-pager -l
+    exit 1
+fi
+
 # Run Django migrations and setup
 echo "🗄️  Setting up Django database..."
-cd /opt/teltonika/django-app
 sudo -u teltonika /opt/teltonika/django-app/venv/bin/python manage.py migrate
 
 # Create Django superuser (non-interactive)
