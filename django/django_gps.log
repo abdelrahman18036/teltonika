@@ -1,0 +1,15 @@
+INFO 2025-07-07 01:03:03,944 autoreload 23296 6808 Watching for file changes with StatReloader
+INFO 2025-07-07 01:03:16,976 views 23296 3236 Received GPS data: 50 bytes
+INFO 2025-07-07 01:03:17,084 basehttp 23296 3236 "POST /api/gps/ HTTP/1.1" 200 101
+INFO 2025-07-07 01:03:19,149 views 23296 3236 Received GPS data: 50 bytes
+INFO 2025-07-07 01:03:19,278 basehttp 23296 3236 "POST /api/gps/ HTTP/1.1" 200 102
+INFO 2025-07-07 01:03:23,860 views 23296 3236 Received GPS data: 50 bytes
+INFO 2025-07-07 01:03:23,973 basehttp 23296 3236 "POST /api/gps/ HTTP/1.1" 200 102
+INFO 2025-07-07 01:03:24,468 views 23296 3236 Received GPS data: 50 bytes
+INFO 2025-07-07 01:03:24,607 basehttp 23296 3236 "POST /api/gps/ HTTP/1.1" 200 101
+INFO 2025-07-07 01:03:25,072 views 23296 3236 Received GPS data: 50 bytes
+INFO 2025-07-07 01:03:25,213 basehttp 23296 3236 "POST /api/gps/ HTTP/1.1" 200 101
+INFO 2025-07-07 01:03:25,673 views 23296 3236 Received GPS data: 50 bytes
+INFO 2025-07-07 01:03:25,808 basehttp 23296 3236 "POST /api/gps/ HTTP/1.1" 200 102
+INFO 2025-07-07 01:03:30,863 views 23296 3236 Received GPS data: 10 bytes
+INFO 2025-07-07 01:03:30,922 basehttp 23296 3236 "POST /api/gps/ HTTP/1.1" 200 102
