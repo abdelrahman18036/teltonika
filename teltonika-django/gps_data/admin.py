@@ -34,14 +34,14 @@ class DeviceAdmin(admin.ModelAdmin):
 class GPSRecordAdmin(admin.ModelAdmin):
     list_display = [
         'device', 'timestamp', 'coordinates', 'speed', 'satellites', 
-        'ignition_status', 'movement_status', 'created_at'
+        'ignition_status', 'movement_status', 'security_summary', 'created_at'
     ]
     list_filter = [
         'device', 'timestamp', 'ignition', 'movement', 
         'gnss_status', 'created_at'
     ]
     search_fields = ['device__imei', 'device__device_name']
-    readonly_fields = ['created_at', 'formatted_coordinates']
+    readonly_fields = ['created_at', 'formatted_coordinates', 'security_flags_summary']
     date_hierarchy = 'timestamp'
     
     fieldsets = (
@@ -78,6 +78,16 @@ class GPSRecordAdmin(admin.ModelAdmin):
         ('Vehicle Information', {
             'fields': ('total_odometer', 'program_number', 'door_status')
         }),
+        ('Vehicle CAN/OBD Data', {
+            'fields': (
+                'vehicle_speed_can', 'accelerator_pedal_position', 'engine_rpm_can',
+                'total_mileage_can', 'fuel_level_can', 'total_mileage_counted'
+            )
+        }),
+        ('Security State', {
+            'fields': ('security_state_flags', 'security_flags_summary'),
+            'description': 'Security state flags and decoded information'
+        }),
         ('Other Data', {
             'fields': ('other_io_data',),
             'classes': ('collapse',)
@@ -111,6 +121,13 @@ class GPSRecordAdmin(admin.ModelAdmin):
             return "Unknown"
         return "Moving" if obj.movement else "Stopped"
     movement_status.short_description = 'Movement'
+
+    def security_summary(self, obj):
+        """Display security flags summary in admin list"""
+        if obj.security_state_flags is None:
+            return "No data"
+        return obj.security_flags_summary
+    security_summary.short_description = 'Security'
 
 
 @admin.register(DeviceStatus)
