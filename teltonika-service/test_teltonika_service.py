@@ -97,6 +97,20 @@ class TeltonikaDeviceSimulator:
             21: gsm_signal,  # GSM Signal (0-5)
             69: 3,  # GNSS Status (3D Fix)
             
+            # Speed data (both GPS and CAN)
+            24: random.randint(0, 80) if movement else 0,  # Speed (GPS)
+            81: random.randint(0, 85) if movement else 0,  # Vehicle Speed (CAN)
+            
+            # Vehicle CAN/OBD data
+            82: random.randint(0, 100) if movement else 0,  # Accelerator Pedal Position %
+            85: random.randint(800, 3500) if ignition else 0,  # Engine RPM (CAN)
+            87: random.randint(24800000, 24810000),  # Total Mileage (CAN) in meters
+            89: random.randint(20, 80),  # Fuel Level (CAN) %
+            105: random.randint(18070000, 18080000),  # Total Mileage Counted in meters
+            
+            # Security State Flags (IO132) - 64-bit value with byte 3 containing flags
+            132: self.create_security_flags(ignition, movement),
+            
             # Power and battery
             66: random.randint(11000, 14500),  # External voltage (mV)
             67: random.randint(3600, 4200),    # Battery voltage (mV)
@@ -124,6 +138,52 @@ class TeltonikaDeviceSimulator:
         }
         
         return io_data
+    
+    def create_security_flags(self, ignition=True, movement=True):
+        """Create realistic security state flags (IO132)"""
+        # Build byte 3 (bits 16-23) with security flags
+        byte3 = 0
+        
+        # Key in ignition (bit 0)
+        if ignition:
+            byte3 |= 0x01
+            
+        # Ignition on (bit 1) 
+        if ignition:
+            byte3 |= 0x02
+            
+        # Dynamic ignition on (bit 2) - sometimes active when moving
+        if movement and random.choice([True, False]):
+            byte3 |= 0x04
+            
+        # Webasto heater (bit 3) - rarely on
+        if random.randint(1, 10) == 1:
+            byte3 |= 0x08
+            
+        # Car locked (bit 4) - usually when not moving
+        if not movement and random.choice([True, False]):
+            byte3 |= 0x10
+            
+        # Car locked remote (bit 5) - sometimes when locked
+        if not movement and (byte3 & 0x10) and random.choice([True, False]):
+            byte3 |= 0x20
+            
+        # Alarm active (bit 6) - rarely
+        if random.randint(1, 20) == 1:
+            byte3 |= 0x40
+            
+        # Immobilizer (bit 7) - sometimes when ignition off
+        if not ignition and random.choice([True, False]):
+            byte3 |= 0x80
+        
+        # Create full 64-bit value with flags in byte 3 (bits 16-23)
+        security_flags = byte3 << 16
+        
+        # Add some random data in other bytes to simulate real device
+        security_flags |= random.randint(0, 0xFFFF)  # Lower 16 bits
+        security_flags |= (random.randint(0, 0xFFFFFFFF) << 24)  # Upper 32 bits
+        
+        return security_flags
     
     def create_codec8_packet(self, gps_records):
         """Create Codec8 AVL data packet"""
@@ -245,6 +305,10 @@ class TeltonikaDeviceSimulator:
                     timestamp = base_time + timedelta(minutes=j)
                     speed = random.randint(0, 80) if j % 5 != 0 else 0  # Stopped every 5th point
                     
+                    # Determine vehicle state for realistic IO data
+                    is_ignition_on = speed > 0 or random.choice([True, False])  # Sometimes ignition on while stopped
+                    is_moving = speed > 0
+                    
                     gps_record = self.create_gps_record(
                         lat=lat, 
                         lon=lon, 
@@ -255,10 +319,10 @@ class TeltonikaDeviceSimulator:
                         satellites=random.randint(6, 12)
                     )
                     
-                    # Add IO data
+                    # Add IO data with realistic vehicle states
                     gps_record['io_data'] = self.create_io_data(
-                        ignition=(speed > 0),
-                        movement=(speed > 0),
+                        ignition=is_ignition_on,
+                        movement=is_moving,
                         gsm_signal=random.randint(3, 5)
                     )
                     
@@ -408,8 +472,16 @@ def test_service_availability():
 
 def main():
     """Main testing function"""
-    print("🚀 Teltonika Service Testing")
-    print("=" * 50)
+    print("🚀 Teltonika Service Testing - Enhanced Edition")
+    print("=" * 60)
+    print("📊 Features being tested:")
+    print("  ✅ GPS coordinates and navigation data")  
+    print("  ✅ Vehicle CAN/OBD data (speed, RPM, fuel, mileage)")
+    print("  ✅ Security state flags (ignition, locks, alarm)")
+    print("  ✅ Power management and battery data")
+    print("  ✅ Digital I/O and sensor data")
+    print("  ✅ GSM/GNSS status and quality")
+    print("")
     
     # Test service availability
     if not test_service_availability():
@@ -420,31 +492,45 @@ def main():
     print("\n📊 Starting GPS device simulation tests...")
     
     # Test 1: Single device with moderate data
-    print("\n" + "─" * 50)
-    print("TEST 1: Single Device (50 GPS points)")
+    print("\n" + "─" * 60)
+    print("TEST 1: Single Device with Enhanced Data (50 GPS points)")
+    print("        → Testing all new IO parameters and security flags")
     test_single_device(device_count=1, points_per_device=50)
     
     # Wait a moment
     time.sleep(2)
     
     # Test 2: Multiple devices
-    print("\n" + "─" * 50)
+    print("\n" + "─" * 60)
     print("TEST 2: Multiple Devices (3 devices, 20 points each)")
+    print("        → Testing concurrent device connections")
     test_multiple_devices(device_count=3, points_per_device=20)
     
     # Wait a moment
     time.sleep(2)
     
     # Test 3: High volume single device
-    print("\n" + "─" * 50)
+    print("\n" + "─" * 60)
     print("TEST 3: High Volume Single Device (200 GPS points)")
+    print("        → Testing system performance with large datasets")
     test_single_device(device_count=1, points_per_device=200)
     
     print("\n🎉 All Teltonika service tests completed!")
-    print("\n📋 Check the service logs to see the received data:")
-    print("   - Service console output")
+    print("\n📋 Check the results in:")
+    print("   - Service console output (security flags decoded)")
     print("   - Log files in /var/log/teltonika/ (if running as service)")
     print("   - Django admin: http://localhost:8000/admin/gps_data/gpsrecord/")
+    print("   - API endpoint: http://localhost:8000/api/devices/")
+    print("\n💡 New data you'll see:")
+    print("   🚗 Vehicle Speed (CAN): IO81")
+    print("   🚗 Accelerator Position: IO82") 
+    print("   🚗 Engine RPM: IO85")
+    print("   🚗 Total Mileage: IO87 (converted to km)")
+    print("   🚗 Fuel Level: IO89")
+    print("   🚗 Mileage Counter: IO105 (converted to km)")
+    print("   🔒 Security Flags: IO132 (decoded as human-readable)")
+    print("\n🔍 In Django Admin, check the 'Security' column and")
+    print("   'Vehicle CAN/OBD Data' section for the new fields!")
 
 
 if __name__ == "__main__":
