@@ -30,6 +30,8 @@ class GPSRecordSerializer(serializers.ModelSerializer):
             'digital_input_1', 'digital_output_1', 'digital_output_2', 'digital_output_3',
             'external_voltage', 'battery_voltage', 'battery_level', 'battery_current',
             'total_odometer', 'program_number', 'door_status',
+            'vehicle_speed_can', 'accelerator_pedal_position', 'engine_rpm_can',
+            'total_mileage_can', 'fuel_level_can', 'total_mileage_counted', 'security_state_flags',
             'other_io_data', 'event_io_id', 'created_at'
         ]
         read_only_fields = ['id', 'device', 'created_at']
@@ -130,6 +132,7 @@ class BulkGPSRecordSerializer(serializers.Serializer):
             
             # Map known IO parameters to specific fields
             field_mapping = {
+                24: 'speed',  # Speed - already handled in GPS section but include to avoid duplicating in other_io
                 69: 'gnss_status',
                 181: 'gnss_pdop', 
                 182: 'gnss_hdop',
@@ -150,6 +153,13 @@ class BulkGPSRecordSerializer(serializers.Serializer):
                 16: 'total_odometer',
                 100: 'program_number',
                 90: 'door_status',
+                81: 'vehicle_speed_can',
+                82: 'accelerator_pedal_position',
+                85: 'engine_rpm_can',
+                87: 'total_mileage_can',
+                89: 'fuel_level_can',
+                105: 'total_mileage_counted',
+                132: 'security_state_flags',
             }
             
             for io_id, value in io_params.items():
@@ -157,6 +167,8 @@ class BulkGPSRecordSerializer(serializers.Serializer):
                 
                 if io_id_int in field_mapping:
                     field_name = field_mapping[io_id_int]
+                    if io_id_int in [87, 105]:
+                        value = value // 1000  # convert meters to km for readability
                     record_data[field_name] = value
                 else:
                     # Store unknown parameters in other_io_data

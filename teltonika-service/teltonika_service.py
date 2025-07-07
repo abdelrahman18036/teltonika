@@ -861,6 +861,7 @@ class TeltonikaService:
             102: "Engine Worktime", 103: "Engine Worktime (counted)", 105: "Total Mileage (counted)",
             107: "Fuel Consumed (counted)", 110: "Fuel Rate (CAN)", 111: "AdBlue Level (%)",
             112: "AdBlue Level (L)", 114: "Engine Load (CAN)", 115: "Engine Temperature",
+            132: "Security State Flags",
         }
         
         decoded_params = []
@@ -1031,6 +1032,8 @@ class TeltonikaService:
                     formatted_value = f"{value}°C"
                 elif io_id == 59:  
                     formatted_value = f"{value/100:.2f}°"
+                elif io_id == 132:  # Security State Flags
+                    formatted_value = f"Flags: 0x{value:X}"
                 else:
                     formatted_value = str(value)
                     

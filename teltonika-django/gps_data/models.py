@@ -76,6 +76,15 @@ class GPSRecord(models.Model):
     # Event information
     event_io_id = models.IntegerField(null=True, blank=True, help_text="Event IO ID")
     
+    # Vehicle CAN / OBD Extra Data
+    vehicle_speed_can = models.IntegerField(null=True, blank=True, help_text="IO081: Vehicle speed (CAN) km/h")
+    accelerator_pedal_position = models.IntegerField(null=True, blank=True, help_text="IO082: Accelerator pedal position %")
+    engine_rpm_can = models.IntegerField(null=True, blank=True, help_text="IO085: Engine RPM (CAN)")
+    total_mileage_can = models.BigIntegerField(null=True, blank=True, help_text="IO087: Total mileage (CAN) in meters")
+    fuel_level_can = models.IntegerField(null=True, blank=True, help_text="IO089: Fuel level (CAN) % or L")
+    total_mileage_counted = models.BigIntegerField(null=True, blank=True, help_text="IO105: Total mileage counted in meters")
+    security_state_flags = models.BigIntegerField(null=True, blank=True, help_text="IO132: Security state flags bit-field")
+    
     # Record metadata
     created_at = models.DateTimeField(auto_now_add=True)
     
