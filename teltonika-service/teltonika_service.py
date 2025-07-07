@@ -1033,7 +1033,7 @@ class TeltonikaService:
                 elif io_id == 59:  
                     formatted_value = f"{value/100:.2f}°"
                 elif io_id == 132:  # Security State Flags
-                    formatted_value = f"Flags: 0x{value:X}"
+                    formatted_value = self.format_security_flags(value)
                 else:
                     formatted_value = str(value)
                     
@@ -1043,7 +1043,43 @@ class TeltonikaService:
         
         return decoded_params, unknown_params
 
+    def decode_security_flags(self, flags_value):
+        """Decode Security State Flags (IO132) bit field"""
+        if flags_value is None:
+            return {}
+        
+        # Convert to 64-bit integer if needed
+        flags = int(flags_value)
+        
+        # Extract byte 3 (bits 16-23) which contains the security flags
+        byte3 = (flags >> 16) & 0xFF
+        
+        return {
+            'key_in_ignition': bool(byte3 & 0x01),
+            'ignition_on': bool(byte3 & 0x02),
+            'dynamic_ign_on': bool(byte3 & 0x04),
+            'webasto_on': bool(byte3 & 0x08),
+            'car_locked': bool(byte3 & 0x10),
+            'car_locked_remote': bool(byte3 & 0x20),
+            'alarm_active': bool(byte3 & 0x40),
+            'immobilizer': bool(byte3 & 0x80),
+        }
 
+    def format_security_flags(self, flags_value):
+        """Format security flags for display"""
+        flags = self.decode_security_flags(flags_value)
+        if not flags:
+            return f"Flags: 0x{flags_value:X}"
+        
+        active_flags = []
+        for flag_name, is_active in flags.items():
+            if is_active:
+                active_flags.append(flag_name.replace('_', ' ').title())
+        
+        if active_flags:
+            return f"Security: {', '.join(active_flags)}"
+        else:
+            return "Security: No flags active"
 
     def extract_gps_coordinates(self, data, offset):
         """Extract GPS coordinates using the same method as GPS analysis"""

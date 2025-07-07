@@ -134,6 +134,46 @@ class GPSRecord(models.Model):
             'hood': bool(door_value & 0x20),
         }
 
+    @property
+    def security_flags_decoded(self):
+        """Decode security state flags (IO132) bit field"""
+        if self.security_state_flags is None:
+            return {}
+        
+        # Convert to integer if needed
+        flags = int(self.security_state_flags)
+        
+        # Extract byte 3 (bits 16-23) which contains the security flags
+        byte3 = (flags >> 16) & 0xFF
+        
+        return {
+            'key_in_ignition': bool(byte3 & 0x01),
+            'ignition_on': bool(byte3 & 0x02),
+            'dynamic_ign_on': bool(byte3 & 0x04),
+            'webasto_on': bool(byte3 & 0x08),
+            'car_locked': bool(byte3 & 0x10),
+            'car_locked_remote': bool(byte3 & 0x20),
+            'alarm_active': bool(byte3 & 0x40),
+            'immobilizer': bool(byte3 & 0x80),
+        }
+
+    @property
+    def security_flags_summary(self):
+        """Get a summary of active security flags"""
+        flags = self.security_flags_decoded
+        if not flags:
+            return "No security data"
+        
+        active_flags = []
+        for flag_name, is_active in flags.items():
+            if is_active:
+                active_flags.append(flag_name.replace('_', ' ').title())
+        
+        if active_flags:
+            return ', '.join(active_flags)
+        else:
+            return "No security flags active"
+
 
 class DeviceStatus(models.Model):
     """Track device connection status and statistics"""

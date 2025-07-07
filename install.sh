@@ -535,7 +535,7 @@ case "$1" in
         echo ""
         echo "🌐 Web Interface: http://$(hostname -I | awk '{print $1}')/admin/"
         echo "📡 GPS Service: $(hostname -I | awk '{print $1}'):5000"
-        echo "👤 Admin Login: admin / admin123"
+        echo "👤 Admin Login: orange / 00oo00oo"
         ;;
 esac
 EOF

@@ -19,6 +19,10 @@ class GPSRecordSerializer(serializers.ModelSerializer):
     # Allow device to be specified by IMEI
     device_imei = serializers.CharField(write_only=True, required=False)
     
+    # Read-only computed fields
+    security_flags_decoded = serializers.ReadOnlyField()
+    security_flags_summary = serializers.ReadOnlyField()
+    
     class Meta:
         model = GPSRecord
         fields = [
