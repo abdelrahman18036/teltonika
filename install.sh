@@ -149,7 +149,7 @@ echo "✅ Teltonika service installed"
 
 # Copy Django project
 echo "🌐 Installing Django application..."
-cp -r teltonika-django/django/* /opt/teltonika/django/
+cp -r teltonika-django/* /opt/teltonika/django/
 chown -R teltonika:teltonika /opt/teltonika/django/
 
 # Install Python dependencies
@@ -167,14 +167,8 @@ echo "✅ Python dependencies installed"
 
 # Configure Django settings for production
 echo "⚙️  Configuring Django for production..."
-cat > /opt/teltonika/django/.env << 'EOF'
-DEBUG=False
-SECRET_KEY=your-secret-key-change-this-in-production
-DATABASE_URL=postgresql://teltonika:00oo00oo@localhost:5432/teltonika
-ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
-EOF
-
-chown teltonika:teltonika /opt/teltonika/django/.env
+# Note: Django settings need to be updated to use environment variables
+# Current settings.py has hardcoded values that need manual configuration
 
 # Run Django migrations
 echo "🔄 Running Django migrations..."
@@ -187,9 +181,9 @@ echo "👤 Creating Django superuser..."
 sudo -u teltonika /opt/teltonika/venv/bin/python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
-if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser('admin', 'admin@teltonika.local', 'admin123')
-    print('Superuser created: admin/admin123')
+if not User.objects.filter(username='orange').exists():
+    User.objects.create_superuser('orange', 'orange@teltonika.local', '00oo00oo')
+    print('Superuser created: orange/00oo00oo')
 else:
     print('Superuser already exists')
 "
@@ -291,9 +285,9 @@ server {
         add_header Cache-Control "public, immutable";
     }
     
-    # Health check
+    # Health check (endpoint needs to be implemented in Django)
     location /health {
-        proxy_pass http://127.0.0.1:8000/api/health/;
+        proxy_pass http://127.0.0.1:8000/admin/;
         proxy_set_header Host $host;
     }
     
@@ -575,8 +569,8 @@ echo "   Admin Panel: http://$(hostname -I | awk '{print $1}')/admin/"
 echo "   API Health:  http://$(hostname -I | awk '{print $1}')/health"
 echo ""
 echo "👤 Admin Login:"
-echo "   Username: admin"
-echo "   Password: admin123"
+echo "   Username: orange"
+echo "   Password: 00oo00oo"
 echo ""
 echo "📡 GPS Device Configuration:"
 echo "   Server IP: $(hostname -I | awk '{print $1}')"
