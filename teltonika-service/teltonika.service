@@ -1,0 +1,22 @@
+[Unit]
+Description=Teltonika GPS Tracking Service
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=teltonika
+Group=teltonika
+WorkingDirectory=/opt/teltonika/service
+ExecStart=/opt/teltonika/venv/bin/python teltonika_service.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Performance settings
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

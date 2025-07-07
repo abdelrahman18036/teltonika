@@ -140,8 +140,8 @@ echo "✅ Python virtual environment created"
 
 # Copy and install service files
 echo "📋 Installing Teltonika service..."
-cp teltonika_service.py /opt/teltonika/service/
-cp django_integration.py /opt/teltonika/service/
+cp teltonika-service/teltonika_service.py /opt/teltonika/service/
+cp teltonika-service/django_integration.py /opt/teltonika/service/
 chmod +x /opt/teltonika/service/teltonika_service.py
 chown -R teltonika:teltonika /opt/teltonika/service/
 
@@ -149,7 +149,7 @@ echo "✅ Teltonika service installed"
 
 # Copy Django project
 echo "🌐 Installing Django application..."
-cp -r django/* /opt/teltonika/django/
+cp -r teltonika-django/django/* /opt/teltonika/django/
 chown -R teltonika:teltonika /opt/teltonika/django/
 
 # Install Python dependencies
