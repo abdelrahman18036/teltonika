@@ -43,10 +43,10 @@ def test_device_commands(imei):
     
     # Commands to test (both Digital Output and CAN Control streams)
     test_commands = [
-        {'type': 'digital_output', 'name': 'lock', 'text': 'setdigout 10'},
-        {'type': 'digital_output', 'name': 'unlock', 'text': 'setdigout 01'},
-        {'type': 'digital_output', 'name': 'immobilize', 'text': 'setdigout ?0'},
-        {'type': 'digital_output', 'name': 'mobilize', 'text': 'setdigout ?1'},
+        {'type': 'digital_output', 'name': 'lock', 'text': 'setdigout 1?? 2??'},
+        {'type': 'digital_output', 'name': 'unlock', 'text': 'setdigout ?1? ?2?'},
+        {'type': 'digital_output', 'name': 'immobilize', 'text': 'setdigout ??0'},
+        {'type': 'digital_output', 'name': 'mobilize', 'text': 'setdigout ??1'},
         {'type': 'can_control', 'name': 'lock', 'text': 'lvcanlockalldoors'},
         {'type': 'can_control', 'name': 'unlock', 'text': 'lvcanopenalldoors'},
         {'type': 'can_control', 'name': 'immobilize', 'text': 'lvcanblockengine'},
@@ -662,10 +662,10 @@ def main():
     print("   🔒 Security Flags: IO132 (decoded as human-readable)")
     print("\n🆕 Command System Features:")
     print("   📱 Digital Output Stream Commands:")
-    print("      - Lock: setdigout 10     # Turn ON DOUT1 (door lock), turn OFF DOUT2")
-    print("      - Unlock: setdigout 01   # Turn OFF DOUT1 (door unlock), turn ON DOUT2")
-    print("      - Mobilize: setdigout ?1 # Ignore DOUT1, turn ON DOUT2 (engine enable)")
-    print("      - Immobilize: setdigout ?0 # Ignore DOUT1, turn OFF DOUT2 (engine disable)")
+    print("      - Lock: setdigout 1?? 2??     # Lock doors - DOUT1=HIGH, additional parameter")
+    print("      - Unlock: setdigout ?1? ?2?   # Unlock doors - DOUT2=HIGH, additional parameter")
+    print("      - Mobilize: setdigout ??1     # Mobilize engine - DOUT3=HIGH")
+    print("      - Immobilize: setdigout ??0   # Immobilize engine - DOUT3=LOW")
     print("   🚗 CAN Control Stream Commands:")
     print("      - Lock: lvcanlockalldoors")
     print("      - Unlock: lvcanopenalldoors")

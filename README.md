@@ -142,10 +142,10 @@ python teltonika-service/teltonika_service.py
 
 **Digital Output Stream:**
 
-- `Lock`: `setdigout 10` # Turn ON DOUT1 (door lock), turn OFF DOUT2
-- `Unlock`: `setdigout 01` # Turn OFF DOUT1 (door unlock), turn ON DOUT2
-- `Mobilize`: `setdigout ?1` # Ignore DOUT1, turn ON DOUT2 (engine enable)
-- `Immobilize`: `setdigout ?0` # Ignore DOUT1, turn OFF DOUT2 (engine disable)
+- `Lock`: `setdigout 1?? 2??` # Lock doors - DOUT1=HIGH, additional parameter
+- `Unlock`: `setdigout ?1? ?2?` # Unlock doors - DOUT2=HIGH, additional parameter
+- `Mobilize`: `setdigout ??1` # Mobilize engine - DOUT3=HIGH
+- `Immobilize`: `setdigout ??0` # Immobilize engine - DOUT3=LOW
 
 **CAN Control Stream:**
 

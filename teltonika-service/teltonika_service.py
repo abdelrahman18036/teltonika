@@ -2,6 +2,23 @@
 """
 Teltonika Service - Production ready server for Ubuntu
 Logs all data to files and runs as a system service
+
+DIGITAL OUTPUT COMMAND REFERENCE:
+===============================
+
+Command format: setdigout XXX YYY ZZZ
+Where XXX, YYY, ZZZ are space-separated parameters
+
+Vehicle Control Mapping:
+  Lock doors:     setdigout 1?? 2??
+  Unlock doors:   setdigout ?1? ?2?
+  Immobilize:     setdigout ??0
+  Mobilize:       setdigout ??1
+
+State values:
+  0 = Low (OFF)
+  1 = High (ON)
+  ? = Ignore (don't change current state)
 """
 
 import socket
@@ -676,12 +693,12 @@ class TeltonikaService:
     def try_command_fallback(self, imei, failed_command_id, command_info):
         """Try to send equivalent command using alternative stream"""
         try:
-            # Map CAN commands to Digital Output equivalents
+            # Map CAN commands to Digital Output equivalents using helper function
             can_to_digital_map = {
-                'lvcanlockalldoors': 'setdigout 10',      # lock -> DOUT1=1, DOUT2=0
-                'lvcanopenalldoors': 'setdigout 01',      # unlock -> DOUT1=0, DOUT2=1
-                'lvcanblockengine': 'setdigout ?0',       # immobilize -> ignore DOUT1, DOUT2=0
-                'lvcanunblockengine': 'setdigout ?1'      # mobilize -> ignore DOUT1, DOUT2=1
+                'lvcanlockalldoors': self.create_digital_output_command('lock'),        # setdigout 1?? 2??
+                'lvcanopenalldoors': self.create_digital_output_command('unlock'),      # setdigout ?1? ?2?
+                'lvcanblockengine': self.create_digital_output_command('immobilize'),   # setdigout ??0
+                'lvcanunblockengine': self.create_digital_output_command('mobilize')    # setdigout ??1
             }
             
             original_command = command_info['command_text']
@@ -735,6 +752,25 @@ class TeltonikaService:
             
         except:
             return None
+    
+    def create_digital_output_command(self, action_type):
+        """
+        Create setdigout command for specific vehicle actions
+        
+        Args:
+            action_type: Type of action ('lock', 'unlock', 'mobilize', 'immobilize')
+            
+        Returns:
+            str: setdigout command in the format specified by user
+        """
+        commands = {
+            'lock': 'setdigout 1?? 2??',
+            'unlock': 'setdigout ?1? ?2?', 
+            'mobilize': 'setdigout ??1',
+            'immobilize': 'setdigout ??0'
+        }
+        
+        return commands.get(action_type, 'setdigout ???')
     
     def create_codec12_command(self, command_text):
         """Create Codec12 command packet to send to device"""

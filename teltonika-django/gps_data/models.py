@@ -247,10 +247,10 @@ class DeviceCommand(models.Model):
     
     # Specific command choices for each stream type
     DIGITAL_OUTPUT_COMMANDS = [
-        ('lock', 'Lock (setdigout 10)'),
-        ('unlock', 'Unlock (setdigout 01)'),
-        ('mobilize', 'Mobilize (setdigout ?1)'),
-        ('immobilize', 'Immobilize (setdigout ?0)'),
+        ('lock', 'Lock (setdigout 1?? 2??)'),
+        ('unlock', 'Unlock (setdigout ?1? ?2?)'),
+        ('mobilize', 'Mobilize (setdigout ??1)'),
+        ('immobilize', 'Immobilize (setdigout ??0)'),
     ]
     
     CAN_CONTROL_COMMANDS = [
@@ -346,10 +346,10 @@ class DeviceCommand(models.Model):
         """Get the actual command text to send to device"""
         command_map = {
             'digital_output': {
-                'lock': 'setdigout 10',      # Turn ON DOUT1 (door lock), turn OFF DOUT2
-                'unlock': 'setdigout 01',    # Turn OFF DOUT1 (door unlock), turn ON DOUT2
-                'mobilize': 'setdigout ?1',  # Ignore DOUT1, turn ON DOUT2 (engine enable)
-                'immobilize': 'setdigout ?0', # Ignore DOUT1, turn OFF DOUT2 (engine disable)
+                'lock': 'setdigout 1?? 2??',     # Lock doors - DOUT1=HIGH, additional parameter
+                'unlock': 'setdigout ?1? ?2?',   # Unlock doors - DOUT2=HIGH, additional parameter
+                'mobilize': 'setdigout ??1',     # Mobilize engine - DOUT3=HIGH
+                'immobilize': 'setdigout ??0',   # Immobilize engine - DOUT3=LOW
             },
             'can_control': {
                 'lock': 'lvcanlockalldoors',
