@@ -164,28 +164,29 @@ class CommandAPIServer:
 class TeltonikaService:
     def __init__(self, config):
         self.config = config
+        self.logger = None
+        self.gps_logger = None
+        self.socket = None
         self.running = True
-        self.server_socket = None
+        self.api_integration = None
+        self.connected_devices = {}  # IMEI -> {socket, address, last_seen}
+        self.pending_commands = {}   # IMEI -> [command objects]
+        self.active_commands = {}    # IMEI -> {command_id: command_info} for tracking responses
         
-        # Track connected devices for command sending
-        self.connected_devices = {}  # {imei: {'socket': client_socket, 'address': address, 'last_seen': timestamp}}
-        self.pending_commands = {}   # {imei: [list of commands to send]}
-        
-        self.setup_logging()
+        # Setup logging and directories
         self.setup_directories()
+        self.setup_logging()
         
         # Initialize command API server
         self.command_api_server = CommandAPIServer(self, self.config.get('command_api_port', 5001))
         
-        # Initialize fast API integration
-        if API_INTEGRATION_AVAILABLE:
-            try:
-                self.api_integration = create_db_integration('http://localhost:8000')
-                self.logger.info("Fast API integration initialized successfully")
-            except Exception as e:
-                self.logger.warning(f"Failed to initialize fast API integration: {e}")
-                self.api_integration = None
-        else:
+        # Initialize API integration if available
+        try:
+            from django_integration import create_db_integration
+            self.api_integration = create_db_integration('http://localhost:8000')
+            self.logger.info("Django API integration enabled")
+        except Exception as e:
+            self.logger.warning(f"Django API integration not available: {e}")
             self.api_integration = None
         
     def setup_directories(self):
@@ -624,21 +625,88 @@ class TeltonikaService:
                     'response_size': response_size
                 })
                 
-                # Update command status via API if available
-                # Note: In a real implementation, you'd need to match this response to a specific command
-                # This could be done by maintaining a mapping of sent commands or using command IDs
-                if self.api_integration:
-                    try:
-                        # For now, we'll mark the most recent pending command as successful
-                        # In a production system, you'd want better command tracking
-                        self.update_latest_command_status(imei, 'success', response_text)
-                    except Exception as e:
-                        self.logger.warning(f"Failed to update command status: {e}")
+                # Update command status based on response
+                self.handle_device_response(imei, response_text)
                 
         except Exception as e:
             self.logger.error(f"Error parsing Codec12 data: {e}")
 
         return None
+    
+    def handle_device_response(self, imei, response_text):
+        """Handle device response and update command status"""
+        try:
+            if imei not in self.active_commands or not self.active_commands[imei]:
+                self.logger.warning(f"No active commands found for device {imei}")
+                return
+                
+            # Get the most recent command (since we don't have explicit command IDs in the response)
+            command_ids = list(self.active_commands[imei].keys())
+            if not command_ids:
+                return
+                
+            # Use the most recent command
+            latest_command_id = max(command_ids, key=lambda x: self.active_commands[imei][x]['sent_at'])
+            command_info = self.active_commands[imei][latest_command_id]
+            
+            # Check if command failed with unknown format
+            if "unknown command or invalid format" in response_text.lower():
+                self.logger.warning(f"Command failed with unknown format: {command_info['command_text']}")
+                
+                # Try automatic fallback if this was a CAN command
+                if self.try_command_fallback(imei, latest_command_id, command_info):
+                    return
+                    
+                # If fallback not possible or failed, mark as failed
+                self.update_command_status(latest_command_id, 'failed', error=response_text)
+                
+            else:
+                # Command succeeded
+                self.logger.info(f"Command succeeded for device {imei}: {response_text}")
+                self.update_command_status(latest_command_id, 'success', response=response_text)
+            
+            # Remove from active commands
+            del self.active_commands[imei][latest_command_id]
+            if not self.active_commands[imei]:
+                del self.active_commands[imei]
+                
+        except Exception as e:
+            self.logger.error(f"Error handling device response: {e}")
+    
+    def try_command_fallback(self, imei, failed_command_id, command_info):
+        """Try to send equivalent command using alternative stream"""
+        try:
+            # Map CAN commands to Digital Output equivalents
+            can_to_digital_map = {
+                'lvcanlockalldoors': 'setdigout 10',      # lock -> DOUT1=1, DOUT2=0
+                'lvcanopenalldoors': 'setdigout 01',      # unlock -> DOUT1=0, DOUT2=1
+                'lvcanblockengine': 'setdigout ?0',       # immobilize -> ignore DOUT1, DOUT2=0
+                'lvcanunblockengine': 'setdigout ?1'      # mobilize -> ignore DOUT1, DOUT2=1
+            }
+            
+            original_command = command_info['command_text']
+            fallback_command = can_to_digital_map.get(original_command)
+            
+            if fallback_command:
+                self.logger.info(f"Attempting fallback from '{original_command}' to '{fallback_command}' for device {imei}")
+                
+                # Mark original command as failed with fallback note
+                self.update_command_status(failed_command_id, 'failed', 
+                                         error=f"CAN command failed, retrying with Digital Output: {fallback_command}")
+                
+                # Send fallback command (without command_id to avoid tracking conflicts)
+                success = self.send_command_to_device(imei, fallback_command)
+                if success:
+                    self.logger.info(f"Fallback command sent successfully to device {imei}")
+                    return True
+                else:
+                    self.logger.error(f"Fallback command failed to send to device {imei}")
+                    
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Error in command fallback: {e}")
+            return False
     
     def create_codec12_response(self, response_text):
         """Create Codec12 response packet"""
@@ -704,7 +772,7 @@ class TeltonikaService:
             if imei not in self.connected_devices:
                 self.logger.warning(f"Device {imei} not connected, cannot send command")
                 return False
-            
+
             device_info = self.connected_devices[imei]
             client_socket = device_info['socket']
             
@@ -718,15 +786,18 @@ class TeltonikaService:
             client_socket.send(command_packet)
             self.logger.info(f"Command sent to device {imei}: {command_text}")
             
-            # Log command event
-            self.log_device_event(imei, "COMMAND_SENT", {
-                'command': command_text,
-                'command_id': command_id,
-                'packet_size': len(command_packet)
-            })
+            # Track this command for response matching
+            if command_id:
+                if imei not in self.active_commands:
+                    self.active_commands[imei] = {}
+                self.active_commands[imei][command_id] = {
+                    'command_text': command_text,
+                    'sent_at': time.time(),
+                    'status': 'sent'
+                }
             
-            # Update command status via API if available
-            if self.api_integration and command_id:
+            # Update command status via API
+            if command_id:
                 try:
                     self.update_command_status(command_id, 'sent')
                 except Exception as e:
@@ -740,9 +811,6 @@ class TeltonikaService:
     
     def update_command_status(self, command_id, status, response=None, error=None):
         """Update command status via Django API"""
-        if not self.api_integration:
-            return
-            
         try:
             import requests
             
@@ -761,32 +829,7 @@ class TeltonikaService:
             
         except Exception as e:
             self.logger.warning(f"Failed to update command status: {e}")
-    
-    def update_latest_command_status(self, imei, status, response=None, error=None):
-        """Update status of the most recent command for a device"""
-        # This is a simplified approach - in production you'd want better command tracking
-        # For now, we'll try to update via the API without a specific command ID
-        # The Django API would need to be modified to handle this case
-        try:
-            import requests
-            
-            data = {
-                'imei': imei,
-                'status': status
-            }
-            
-            if response:
-                data['response'] = response
-            if error:
-                data['error'] = error
-            
-            # Make HTTP request to Django API (this endpoint would need to be created)
-            # For now, just log the response
-            self.logger.info(f"Command response from {imei}: {response if response else error}")
-            
-        except Exception as e:
-            self.logger.warning(f"Failed to update latest command status: {e}")
-    
+
     def add_connected_device(self, imei, client_socket, client_address):
         """Add device to connected devices list"""
         self.connected_devices[imei] = {
@@ -1004,17 +1047,17 @@ class TeltonikaService:
             # Start command API server
             self.command_api_server.start()
             
-            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server_socket.bind((self.config['host'], self.config['port']))
-            self.server_socket.listen(10)
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket.bind((self.config['host'], self.config['port']))
+            self.socket.listen(10)
             
             self.logger.info(f"Teltonika Service started on {self.config['host']}:{self.config['port']}")
             self.logger.info(f"Command API available on port {self.config.get('command_api_port', 5001)}")
             
             while self.running:
                 try:
-                    client_socket, client_address = self.server_socket.accept()
+                    client_socket, client_address = self.socket.accept()
                     
                     # Handle each client in a separate thread
                     client_thread = threading.Thread(
@@ -1035,8 +1078,8 @@ class TeltonikaService:
     def stop_server(self):
         """Stop the server gracefully"""
         self.running = False
-        if self.server_socket:
-            self.server_socket.close()
+        if self.socket:
+            self.socket.close()
         
         # Stop command API server
         if self.command_api_server:
