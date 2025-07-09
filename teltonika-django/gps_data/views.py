@@ -11,8 +11,10 @@ from django.http import JsonResponse
 import time
 import json
 import logging
+import requests
+import socket
 
-from .models import Device, GPSRecord, DeviceStatus, APILog
+from .models import Device, GPSRecord, DeviceStatus, APILog, DeviceCommand
 from .serializers import (
     DeviceSerializer, GPSRecordSerializer, BulkGPSRecordSerializer,
     DeviceStatusSerializer, TeltonikaDataSerializer
@@ -302,3 +304,238 @@ def health_check(request):
             'timestamp': timezone.now().isoformat(),
             'error': str(e)
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class DeviceCommandView(APIView):
+    """
+    Send commands to IoT devices via Teltonika service
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request, imei):
+        """Send a command to a device by IMEI"""
+        try:
+            # Get device
+            device = get_object_or_404(Device, imei=imei)
+            
+            # Extract command parameters
+            command_type = request.data.get('command_type')
+            command_name = request.data.get('command_name')
+            
+            # Validate inputs
+            if not command_type or not command_name:
+                return Response({
+                    'status': 'error',
+                    'message': 'command_type and command_name are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate command type
+            valid_types = ['digital_output', 'can_control']
+            if command_type not in valid_types:
+                return Response({
+                    'status': 'error',
+                    'message': f'command_type must be one of: {valid_types}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate command name
+            valid_commands = ['lock', 'unlock', 'mobilize', 'immobilize']
+            if command_name not in valid_commands:
+                return Response({
+                    'status': 'error',
+                    'message': f'command_name must be one of: {valid_commands}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get the actual command text
+            command_text = DeviceCommand.get_command_text(command_type, command_name)
+            if not command_text:
+                return Response({
+                    'status': 'error',
+                    'message': 'Invalid command combination'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create command record
+            command = DeviceCommand.objects.create(
+                device=device,
+                command_type=command_type,
+                command_name=command_name,
+                command_text=command_text,
+                status='pending'
+            )
+            
+            # Try to send command to device via teltonika service
+            try:
+                success = self.send_command_to_service(imei, command_text, command.id)
+                if success:
+                    command.mark_sent()
+                    return Response({
+                        'status': 'success',
+                        'message': 'Command sent successfully',
+                        'command_id': command.id,
+                        'command_text': command_text
+                    }, status=status.HTTP_200_OK)
+                else:
+                    command.mark_failed('Failed to send command to teltonika service')
+                    return Response({
+                        'status': 'error',
+                        'message': 'Failed to send command to device',
+                        'command_id': command.id
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    
+            except Exception as e:
+                command.mark_failed(str(e))
+                return Response({
+                    'status': 'error',
+                    'message': f'Error sending command: {str(e)}',
+                    'command_id': command.id
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            logger.error(f"Error in DeviceCommandView: {str(e)}")
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def send_command_to_service(self, imei, command_text, command_id):
+        """Send command to teltonika service via HTTP API"""
+        try:
+            logger.info(f"Sending command to device {imei}: {command_text} (command_id: {command_id})")
+            
+            # Send HTTP request to teltonika service command API
+            response = requests.post('http://localhost:5001/send_command', json={
+                'imei': imei,
+                'command': command_text,
+                'command_id': command_id
+            }, timeout=10)
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                logger.info(f"Command successfully queued: {response_data.get('message')}")
+                return True
+            else:
+                logger.error(f"Failed to send command: HTTP {response.status_code}")
+                return False
+            
+        except requests.exceptions.ConnectionError:
+            logger.error("Could not connect to teltonika service (is it running on port 5001?)")
+            return False
+        except requests.exceptions.Timeout:
+            logger.error("Timeout while sending command to teltonika service")
+            return False
+        except Exception as e:
+            logger.error(f"Error sending command to service: {str(e)}")
+            return False
+
+    def get(self, request, imei):
+        """Get command history for a device"""
+        try:
+            device = get_object_or_404(Device, imei=imei)
+            commands = DeviceCommand.objects.filter(device=device).order_by('-created_at')
+            
+            command_data = []
+            for cmd in commands:
+                command_data.append({
+                    'id': cmd.id,
+                    'command_type': cmd.command_type,
+                    'command_name': cmd.command_name,
+                    'command_text': cmd.command_text,
+                    'status': cmd.status,
+                    'created_at': cmd.created_at,
+                    'sent_at': cmd.sent_at,
+                    'completed_at': cmd.completed_at,
+                    'device_response': cmd.device_response,
+                    'error_message': cmd.error_message,
+                    'retry_count': cmd.retry_count,
+                    'duration': cmd.duration
+                })
+            
+            return Response({
+                'status': 'success',
+                'device_imei': imei,
+                'commands': command_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def command_status(request, command_id):
+    """Get status of a specific command"""
+    try:
+        command = get_object_or_404(DeviceCommand, id=command_id)
+        
+        return Response({
+            'status': 'success',
+            'command': {
+                'id': command.id,
+                'device_imei': command.device.imei,
+                'command_type': command.command_type,
+                'command_name': command.command_name,
+                'command_text': command.command_text,
+                'status': command.status,
+                'created_at': command.created_at,
+                'sent_at': command.sent_at,
+                'completed_at': command.completed_at,
+                'device_response': command.device_response,
+                'error_message': command.error_message,
+                'retry_count': command.retry_count,
+                'duration': command.duration
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def update_command_status(request):
+    """Update command status (called by teltonika service)"""
+    try:
+        command_id = request.data.get('command_id')
+        new_status = request.data.get('status')
+        response_text = request.data.get('response')
+        error_message = request.data.get('error')
+        
+        if not command_id or not new_status:
+            return Response({
+                'status': 'error',
+                'message': 'command_id and status are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        command = get_object_or_404(DeviceCommand, id=command_id)
+        
+        if new_status == 'success':
+            command.mark_success(response_text)
+        elif new_status == 'failed':
+            command.mark_failed(error_message)
+        elif new_status == 'timeout':
+            command.mark_timeout()
+        elif new_status == 'sent':
+            command.mark_sent()
+        else:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid status value'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({
+            'status': 'success',
+            'message': 'Command status updated',
+            'command_id': command_id,
+            'new_status': new_status
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

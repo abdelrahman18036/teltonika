@@ -9,7 +9,117 @@ import struct
 import time
 import threading
 import random
+import requests
+import json
 from datetime import datetime, timezone, timedelta
+
+
+def test_command_api():
+    """Test the command API functionality"""
+    print("🔧 Testing Command API functionality...")
+    
+    try:
+        # Test API health check
+        response = requests.get('http://localhost:5001/health', timeout=5)
+        if response.status_code == 200:
+            health_data = response.json()
+            print(f"✅ Command API is healthy: {health_data['connected_devices']} devices connected")
+        else:
+            print("❌ Command API health check failed")
+            return False
+    except requests.exceptions.ConnectionError:
+        print("❌ Command API not available on port 5001")
+        return False
+    except Exception as e:
+        print(f"❌ Error testing command API: {e}")
+        return False
+    
+    return True
+
+
+def test_device_commands(imei):
+    """Test sending commands to a specific device"""
+    print(f"📱 Testing commands for device {imei}...")
+    
+    # Commands to test (both Digital Output and CAN Control streams)
+    test_commands = [
+        {'type': 'digital_output', 'name': 'lock', 'text': 'setdigout 1?? 2??'},
+        {'type': 'digital_output', 'name': 'unlock', 'text': 'setdigout ?1? ?2?'},
+        {'type': 'digital_output', 'name': 'immobilize', 'text': 'setdigout ??0'},
+        {'type': 'digital_output', 'name': 'mobilize', 'text': 'setdigout ??1'},
+        {'type': 'can_control', 'name': 'lock', 'text': 'lvcanlockalldoors'},
+        {'type': 'can_control', 'name': 'unlock', 'text': 'lvcanopenalldoors'},
+        {'type': 'can_control', 'name': 'immobilize', 'text': 'lvcanblockengine'},
+        {'type': 'can_control', 'name': 'mobilize', 'text': 'lvcanunblockengine'},
+    ]
+    
+    success_count = 0
+    
+    for cmd in test_commands:
+        try:
+            print(f"  📤 Sending {cmd['type']} - {cmd['name']}: {cmd['text']}")
+            
+            # Send command via HTTP API
+            response = requests.post('http://localhost:5001/send_command', json={
+                'imei': imei,
+                'command': cmd['text'],
+                'command_id': f"test_{int(time.time())}_{cmd['name']}"
+            }, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"    ✅ {result['message']}")
+                success_count += 1
+            else:
+                print(f"    ❌ Failed: HTTP {response.status_code}")
+                
+        except Exception as e:
+            print(f"    ❌ Error: {e}")
+        
+        # Small delay between commands
+        time.sleep(1)
+    
+    print(f"📊 Command Test Results: {success_count}/{len(test_commands)} commands sent successfully")
+    return success_count == len(test_commands)
+
+
+def test_django_command_api():
+    """Test the Django API for sending commands"""
+    print("🐍 Testing Django Command API...")
+    
+    test_imei = "867324001001001"  # Use a test IMEI
+    
+    try:
+        # Test sending a command via Django API
+        response = requests.post(f'http://localhost:8000/api/devices/{test_imei}/commands/', json={
+            'command_type': 'digital_output',
+            'command_name': 'lock'
+        }, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Django command API: {result['message']}")
+            command_id = result.get('command_id')
+            
+            # Check command status
+            if command_id:
+                time.sleep(1)
+                status_response = requests.get(f'http://localhost:8000/api/commands/{command_id}/', timeout=5)
+                if status_response.status_code == 200:
+                    status_data = status_response.json()
+                    print(f"  📊 Command status: {status_data['command']['status']}")
+                
+            return True
+        else:
+            print(f"❌ Django command API failed: HTTP {response.status_code}")
+            return False
+            
+    except requests.exceptions.ConnectionError:
+        print("❌ Django API not available on port 8000")
+        return False
+    except Exception as e:
+        print(f"❌ Error testing Django API: {e}")
+        return False
 
 
 class TeltonikaDeviceSimulator:
@@ -472,8 +582,8 @@ def test_service_availability():
 
 def main():
     """Main testing function"""
-    print("🚀 Teltonika Service Testing - Enhanced Edition")
-    print("=" * 60)
+    print("🚀 Teltonika Service Testing - Command Control Edition")
+    print("=" * 70)
     print("📊 Features being tested:")
     print("  ✅ GPS coordinates and navigation data")  
     print("  ✅ Vehicle CAN/OBD data (speed, RPM, fuel, mileage)")
@@ -481,6 +591,8 @@ def main():
     print("  ✅ Power management and battery data")
     print("  ✅ Digital I/O and sensor data")
     print("  ✅ GSM/GNSS status and quality")
+    print("  🆕 Device command sending (Digital Output & CAN Control)")
+    print("  🆕 Command history tracking")
     print("")
     
     # Test service availability
@@ -489,19 +601,37 @@ def main():
         print("   python teltonika_service.py")
         return
     
+    # Test command API availability
+    command_api_available = test_command_api()
+    
     print("\n📊 Starting GPS device simulation tests...")
     
     # Test 1: Single device with moderate data
-    print("\n" + "─" * 60)
+    print("\n" + "─" * 70)
     print("TEST 1: Single Device with Enhanced Data (50 GPS points)")
     print("        → Testing all new IO parameters and security flags")
+    device_imei = "867324001001001"
     test_single_device(device_count=1, points_per_device=50)
+    
+    # Test command functionality if API is available
+    if command_api_available:
+        time.sleep(2)
+        print("\n" + "─" * 70)
+        print("TEST 4: Command Functionality Testing")
+        print("        → Testing Digital Output and CAN Control commands")
+        
+        # Test commands via direct service API
+        test_device_commands(device_imei)
+        
+        # Test Django command API
+        time.sleep(2)
+        test_django_command_api()
     
     # Wait a moment
     time.sleep(2)
     
     # Test 2: Multiple devices
-    print("\n" + "─" * 60)
+    print("\n" + "─" * 70)
     print("TEST 2: Multiple Devices (3 devices, 20 points each)")
     print("        → Testing concurrent device connections")
     test_multiple_devices(device_count=3, points_per_device=20)
@@ -510,7 +640,7 @@ def main():
     time.sleep(2)
     
     # Test 3: High volume single device
-    print("\n" + "─" * 60)
+    print("\n" + "─" * 70)
     print("TEST 3: High Volume Single Device (200 GPS points)")
     print("        → Testing system performance with large datasets")
     test_single_device(device_count=1, points_per_device=200)
@@ -520,8 +650,9 @@ def main():
     print("   - Service console output (security flags decoded)")
     print("   - Log files in /var/log/teltonika/ (if running as service)")
     print("   - Django admin: http://localhost:8000/admin/gps_data/gpsrecord/")
+    print("   - Django admin: http://localhost:8000/admin/gps_data/devicecommand/")
     print("   - API endpoint: http://localhost:8000/api/devices/")
-    print("\n💡 New data you'll see:")
+    print("\n💡 GPS Data you'll see:")
     print("   🚗 Vehicle Speed (CAN): IO81")
     print("   🚗 Accelerator Position: IO82") 
     print("   🚗 Engine RPM: IO85")
@@ -529,8 +660,25 @@ def main():
     print("   🚗 Fuel Level: IO89")
     print("   🚗 Mileage Counter: IO105 (converted to km)")
     print("   🔒 Security Flags: IO132 (decoded as human-readable)")
-    print("\n🔍 In Django Admin, check the 'Security' column and")
-    print("   'Vehicle CAN/OBD Data' section for the new fields!")
+    print("\n🆕 Command System Features:")
+    print("   📱 Digital Output Stream Commands:")
+    print("      - Lock: setdigout 1?? 2??")
+    print("      - Unlock: setdigout ?1? ?2?")
+    print("      - Mobilize: setdigout ??1")
+    print("      - Immobilize: setdigout ??0")
+    print("   🚗 CAN Control Stream Commands:")
+    print("      - Lock: lvcanlockalldoors")
+    print("      - Unlock: lvcanopenalldoors")
+    print("      - Mobilize: lvcanunblockengine")
+    print("      - Immobilize: lvcanblockengine")
+    print("\n🔍 In Django Admin:")
+    print("   - Check 'Device commands' for command history")
+    print("   - Check 'Security' column in GPS records")
+    print("   - Check 'Vehicle CAN/OBD Data' section for new fields!")
+    print("\n📡 API Endpoints for Commands:")
+    print("   POST /api/devices/{imei}/commands/")
+    print("   GET  /api/devices/{imei}/commands/")
+    print("   GET  /api/commands/{command_id}/")
 
 
 if __name__ == "__main__":

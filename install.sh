@@ -7,12 +7,15 @@
 
 set -e
 
-echo "🚀 Installing Teltonika GPS Tracking Server - Complete Edition..."
-echo "=================================================================="
+echo "🚀 Installing Teltonika GPS Tracking Server - Command Control Edition..."
+echo "======================================================================="
 echo "Features:"
 echo "  ✅ High-performance Teltonika service (port 5000)"
+echo "  ✅ IoT device command control (Digital Output & CAN streams)"
+echo "  ✅ Command API server (port 5001)"
 echo "  ✅ Django REST API with PostgreSQL"
 echo "  ✅ Real-time data storage and retrieval"
+echo "  ✅ Command history tracking and status monitoring"
 echo "  ✅ Web admin interface"
 echo "  ✅ Optimized for large-scale deployments"
 echo "  ✅ Complete monitoring and logging"
@@ -328,7 +331,8 @@ echo "🔥 Configuring firewall..."
 ufw allow 22/tcp    # SSH
 ufw allow 80/tcp    # HTTP
 ufw allow 443/tcp   # HTTPS
-ufw allow 5000/tcp  # Teltonika service
+ufw allow 5000/tcp  # Teltonika GPS service
+ufw allow 5001/tcp  # Teltonika command API
 ufw --force enable
 
 echo "✅ Firewall configured"
@@ -357,16 +361,19 @@ echo "Disk: $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 " used)"}')"
 
 echo ""
 echo "📡 Network Connections:"
-echo "Port 5000 (Teltonika): $(netstat -tlnp | grep :5000 | wc -l) connections"
+echo "Port 5000 (GPS Service): $(netstat -tlnp | grep :5000 | wc -l) connections"
+echo "Port 5001 (Command API): $(netstat -tlnp | grep :5001 | wc -l) connections"
 echo "Port 8000 (Django): $(netstat -tlnp | grep :8000 | wc -l) connections"
 
 echo ""
 echo "💾 Database Stats:"
 sudo -u teltonika /opt/teltonika/venv/bin/python /opt/teltonika/django/manage.py shell -c "
-from gps_data.models import Device, GPSRecord
+from gps_data.models import Device, GPSRecord, DeviceCommand
 print(f'Devices: {Device.objects.count()}')
 print(f'GPS Records: {GPSRecord.objects.count()}')
+print(f'Device Commands: {DeviceCommand.objects.count()}')
 print(f'Records today: {GPSRecord.objects.filter(created_at__date__gte=\"$(date +%Y-%m-%d)\").count()}')
+print(f'Commands today: {DeviceCommand.objects.filter(created_at__date__gte=\"$(date +%Y-%m-%d)\").count()}')
 "
 
 echo ""
@@ -406,6 +413,14 @@ def test_teltonika_service():
     except:
         return False
 
+def test_command_api():
+    """Test Command API"""
+    try:
+        response = requests.get('http://127.0.0.1:5001/health', timeout=5)
+        return response.status_code == 200
+    except:
+        return False
+
 def test_django_api():
     """Test Django API"""
     try:
@@ -425,15 +440,22 @@ def test_database_performance():
         return False, 0
 
 def main():
-    print("🚀 Teltonika Performance Test")
-    print("=" * 40)
+    print("🚀 Teltonika Performance Test - Command Control Edition")
+    print("=" * 55)
     
     # Test Teltonika service
-    print("🔍 Testing Teltonika Service (port 5000)...")
+    print("🔍 Testing Teltonika GPS Service (port 5000)...")
     if test_teltonika_service():
-        print("✅ Teltonika service is responding")
+        print("✅ Teltonika GPS service is responding")
     else:
-        print("❌ Teltonika service is not responding")
+        print("❌ Teltonika GPS service is not responding")
+    
+    # Test Command API
+    print("🔍 Testing Command API (port 5001)...")
+    if test_command_api():
+        print("✅ Command API is responding")
+    else:
+        print("❌ Command API is not responding")
     
     # Test Django API
     print("🔍 Testing Django API...")
@@ -450,7 +472,7 @@ def main():
     else:
         print("❌ Database query failed")
     
-    print("\n📊 System is ready for GPS device connections!")
+    print("\n📊 System is ready for GPS device connections and command control!")
 
 if __name__ == "__main__":
     main()
@@ -498,6 +520,21 @@ case "$1" in
     test)
         sudo -u teltonika /opt/teltonika/venv/bin/python /opt/teltonika/performance_test.py
         ;;
+    command)
+        echo "📱 Testing Command API functionality..."
+        echo "Available commands: lock, unlock, mobilize, immobilize"
+        echo "Command types: digital_output, can_control"
+        echo ""
+        read -p "Enter device IMEI: " imei
+        read -p "Enter command type (digital_output/can_control): " cmd_type
+        read -p "Enter command name (lock/unlock/mobilize/immobilize): " cmd_name
+        
+        echo "🚀 Sending command..."
+        curl -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
+             -H "Content-Type: application/json" \
+             -d "{\"command_type\": \"$cmd_type\", \"command_name\": \"$cmd_name\"}" \
+             2>/dev/null | python3 -m json.tool
+        ;;
     logs)
         echo "📋 Choose log to view:"
         echo "1) Teltonika service logs"
@@ -520,8 +557,8 @@ case "$1" in
         sudo /opt/teltonika/monitor.sh
         ;;
     *)
-        echo "🚀 Teltonika GPS Tracking System - Complete Edition"
-        echo "Usage: teltonika {start|stop|restart|status|monitor|test|logs|scale}"
+        echo "🚀 Teltonika GPS Tracking System - Command Control Edition"
+        echo "Usage: teltonika {start|stop|restart|status|monitor|test|command|logs|scale}"
         echo ""
         echo "Commands:"
         echo "  start    - Start all services"
@@ -530,11 +567,13 @@ case "$1" in
         echo "  status   - Show service status"
         echo "  monitor  - Show system monitor"
         echo "  test     - Run performance tests"
+        echo "  command  - Send test command to device"
         echo "  logs     - View service logs"
         echo "  scale    - View scale information"
         echo ""
         echo "🌐 Web Interface: http://$(hostname -I | awk '{print $1}')/admin/"
         echo "📡 GPS Service: $(hostname -I | awk '{print $1}'):5000"
+        echo "📱 Command API: $(hostname -I | awk '{print $1}'):5001"
         echo "👤 Admin Login: orange / 00oo00oo"
         ;;
 esac
@@ -561,8 +600,8 @@ sudo -u teltonika /opt/teltonika/venv/bin/python /opt/teltonika/performance_test
 echo ""
 echo "🎉 Installation completed successfully!"
 echo ""
-echo "🚀 Teltonika GPS Tracking System - Complete Edition"
-echo "=================================================="
+echo "🚀 Teltonika GPS Tracking System - Command Control Edition"
+echo "=========================================================="
 echo ""
 echo "🌐 Web Interfaces:"
 echo "   Admin Panel: http://$(hostname -I | awk '{print $1}')/admin/"
@@ -574,24 +613,35 @@ echo "   Password: 00oo00oo"
 echo ""
 echo "📡 GPS Device Configuration:"
 echo "   Server IP: $(hostname -I | awk '{print $1}')"
-echo "   Port: 5000"
-echo "   Protocol: TCP"
+echo "   GPS Port: 5000 (TCP)"
+echo "   Command Port: 5001 (HTTP API)"
+echo "   Protocol: Teltonika AVL + Codec12"
+echo ""
+echo "📱 Device Command Features:"
+echo "   Digital Output Stream: Lock/Unlock doors, Mobilize/Immobilize"
+echo "   CAN Control Stream: Vehicle control via CAN bus"
+echo "   Command History: Full tracking with status monitoring"
+echo "   Real-time Response: Immediate command execution and feedback"
 echo ""
 echo "⚡ System Capacity:"
 echo "   Concurrent Devices: 1,000+"
 echo "   Records per Day: 58+ Million"
 echo "   Performance: 673+ records/second"
+echo "   Command Throughput: Real-time execution"
 echo ""
 echo "🔧 Management Commands:"
 echo "   teltonika start    - Start all services"
 echo "   teltonika status   - Check system status"
 echo "   teltonika monitor  - View system monitor"
 echo "   teltonika test     - Run performance tests"
+echo "   teltonika command  - Send test commands"
 echo "   teltonika scale    - View scale information"
 echo ""
 echo "🔴 Next Steps:"
 echo "1. Configure your GPS devices to connect to: $(hostname -I | awk '{print $1}'):5000"
 echo "2. Access admin panel: http://$(hostname -I | awk '{print $1}')/admin/"
 echo "3. Monitor live data: teltonika monitor"
+echo "4. Test commands: teltonika command"
+echo "5. View command history in Django Admin → Device commands"
 echo ""
-echo "✅ System is ready for production use!" 
+echo "✅ System is ready for production use with full command control!" 

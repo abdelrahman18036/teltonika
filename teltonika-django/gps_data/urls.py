@@ -14,6 +14,11 @@ urlpatterns = [
     path('devices/<str:imei>/records/', views.DeviceGPSRecordsView.as_view(), name='device_gps_records'),
     path('devices/<str:imei>/status/', views.update_device_status, name='update_device_status'),
     
+    # Command management
+    path('devices/<str:imei>/commands/', views.DeviceCommandView.as_view(), name='device_commands'),
+    path('commands/<int:command_id>/', views.command_status, name='command_status'),
+    path('commands/update/', views.update_command_status, name='update_command_status'),
+    
     # GPS data access
     path('records/latest/', views.LatestGPSRecordsView.as_view(), name='latest_gps_records'),
     

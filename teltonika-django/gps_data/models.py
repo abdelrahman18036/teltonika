@@ -234,3 +234,146 @@ class APILog(models.Model):
     
     def __str__(self):
         return f"API Log: {self.method} {self.endpoint} - {self.status_code}"
+
+
+class DeviceCommand(models.Model):
+    """Track commands sent to IoT devices with success/failure status"""
+    
+    # Command types based on the two streams mentioned
+    COMMAND_TYPE_CHOICES = [
+        ('digital_output', 'Digital Output Stream'),
+        ('can_control', 'CAN Control Stream'),
+    ]
+    
+    # Specific command choices for each stream type
+    DIGITAL_OUTPUT_COMMANDS = [
+        ('lock', 'Lock (setdigout 1?? 2??)'),
+        ('unlock', 'Unlock (setdigout ?1? ?2?)'),
+        ('mobilize', 'Mobilize (setdigout ??1)'),
+        ('immobilize', 'Immobilize (setdigout ??0)'),
+    ]
+    
+    CAN_CONTROL_COMMANDS = [
+        ('lock', 'Lock (lvcanlockalldoors)'),
+        ('unlock', 'Unlock (lvcanopenalldoors)'),
+        ('mobilize', 'Mobilize (lvcanunblockengine)'),
+        ('immobilize', 'Immobilize (lvcanblockengine)'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('timeout', 'Timeout'),
+    ]
+    
+    # Basic information
+    device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='commands')
+    command_type = models.CharField(max_length=20, choices=COMMAND_TYPE_CHOICES)
+    command_name = models.CharField(max_length=20, help_text="lock, unlock, mobilize, immobilize")
+    command_text = models.CharField(max_length=100, help_text="The actual command sent to device")
+    
+    # Status tracking
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Response tracking
+    device_response = models.TextField(null=True, blank=True, help_text="Response received from device")
+    error_message = models.TextField(null=True, blank=True)
+    
+    # Additional metadata
+    retry_count = models.IntegerField(default=0)
+    max_retries = models.IntegerField(default=3)
+    
+    class Meta:
+        db_table = 'device_commands'
+        indexes = [
+            models.Index(fields=['device', 'created_at']),
+            models.Index(fields=['status']),
+            models.Index(fields=['command_type', 'command_name']),
+            models.Index(fields=['created_at']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Command {self.command_name} for {self.device.imei} - {self.status}"
+    
+    def mark_sent(self):
+        """Mark command as sent"""
+        self.status = 'sent'
+        self.sent_at = timezone.now()
+        self.save(update_fields=['status', 'sent_at'])
+    
+    def mark_success(self, response=None):
+        """Mark command as successful"""
+        self.status = 'success'
+        self.completed_at = timezone.now()
+        if response:
+            self.device_response = response
+        self.save(update_fields=['status', 'completed_at', 'device_response'])
+    
+    def mark_failed(self, error=None):
+        """Mark command as failed"""
+        self.status = 'failed'
+        self.completed_at = timezone.now()
+        if error:
+            self.error_message = error
+        self.save(update_fields=['status', 'completed_at', 'error_message'])
+    
+    def mark_timeout(self):
+        """Mark command as timed out"""
+        self.status = 'timeout'
+        self.completed_at = timezone.now()
+        self.save(update_fields=['status', 'completed_at'])
+    
+    def can_retry(self):
+        """Check if command can be retried"""
+        return self.retry_count < self.max_retries and self.status in ['failed', 'timeout']
+    
+    def increment_retry(self):
+        """Increment retry count"""
+        self.retry_count += 1
+        self.status = 'pending'
+        self.save(update_fields=['retry_count', 'status'])
+    
+    @classmethod
+    def get_command_text(cls, command_type, command_name):
+        """Get the actual command text to send to device"""
+        command_map = {
+            'digital_output': {
+                'lock': 'setdigout 1?? 2??',
+                'unlock': 'setdigout ?1? ?2?',
+                'mobilize': 'setdigout ??1',
+                'immobilize': 'setdigout ??0',
+            },
+            'can_control': {
+                'lock': 'lvcanlockalldoors',
+                'unlock': 'lvcanopenalldoors', 
+                'mobilize': 'lvcanunblockengine',
+                'immobilize': 'lvcanblockengine',
+            }
+        }
+        
+        return command_map.get(command_type, {}).get(command_name, '')
+    
+    @property
+    def is_pending(self):
+        """Check if command is pending"""
+        return self.status == 'pending'
+    
+    @property
+    def is_completed(self):
+        """Check if command is completed (success/failed/timeout)"""
+        return self.status in ['success', 'failed', 'timeout']
+    
+    @property
+    def duration(self):
+        """Get command duration if completed"""
+        if self.sent_at and self.completed_at:
+            return (self.completed_at - self.sent_at).total_seconds()
+        return None

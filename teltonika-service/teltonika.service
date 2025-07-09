@@ -1,5 +1,5 @@
 [Unit]
-Description=Teltonika GPS Tracking Service
+Description=Teltonika GPS Tracking Service with Command Control
 After=network.target postgresql.service
 Wants=postgresql.service
 

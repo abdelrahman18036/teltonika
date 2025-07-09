@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from .models import Device, GPSRecord, DeviceStatus, APILog
+from .models import Device, GPSRecord, DeviceStatus, APILog, DeviceCommand
 
 
 @admin.register(Device)
@@ -177,6 +177,54 @@ class APILogAdmin(admin.ModelAdmin):
     
     def has_add_permission(self, request):
         return False  # Don't allow manual creation of API logs
+
+
+@admin.register(DeviceCommand)
+class DeviceCommandAdmin(admin.ModelAdmin):
+    list_display = [
+        'device', 'command_type', 'command_name', 'status', 
+        'created_at', 'sent_at', 'completed_at', 'retry_count', 'duration_display'
+    ]
+    list_filter = [
+        'command_type', 'command_name', 'status', 'created_at', 'sent_at'
+    ]
+    search_fields = ['device__imei', 'device__device_name', 'command_text', 'device_response']
+    readonly_fields = [
+        'created_at', 'sent_at', 'completed_at', 'duration', 'device_response', 'command_text'
+    ]
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Command Information', {
+            'fields': ('device', 'command_type', 'command_name', 'command_text')
+        }),
+        ('Status & Timing', {
+            'fields': ('status', 'created_at', 'sent_at', 'completed_at', 'duration')
+        }),
+        ('Response & Errors', {
+            'fields': ('device_response', 'error_message')
+        }),
+        ('Retry Management', {
+            'fields': ('retry_count', 'max_retries')
+        })
+    )
+    
+    def duration_display(self, obj):
+        """Display command duration in a readable format"""
+        duration = obj.duration
+        if duration is not None:
+            return f"{duration:.2f}s"
+        return "N/A"
+    duration_display.short_description = 'Duration'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('device')
+    
+    def save_model(self, request, obj, form, change):
+        """Auto-populate command_text when saving"""
+        if not obj.command_text:
+            obj.command_text = DeviceCommand.get_command_text(obj.command_type, obj.command_name)
+        super().save_model(request, obj, form, change)
 
 
 # Customize admin site

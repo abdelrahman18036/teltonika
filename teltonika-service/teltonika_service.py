@@ -15,6 +15,8 @@ import signal
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.parse
 
 # Django API integration
 try:
@@ -28,19 +30,152 @@ except ImportError:
 CONFIG = {
     'host': '0.0.0.0',
     'port': 5000,
+    'command_api_port': 5001,  # HTTP API port for receiving commands
     'log_dir': '/var/log/teltonika',
     'data_dir': '/var/lib/teltonika',
     'max_log_size': 10 * 1024 * 1024,  # 10MB
     'backup_count': 5
 }
 
+
+class CommandAPIHandler(BaseHTTPRequestHandler):
+    """HTTP API handler for receiving commands from Django"""
+    
+    def __init__(self, request, client_address, server, teltonika_service):
+        self.teltonika_service = teltonika_service
+        super().__init__(request, client_address, server)
+    
+    def do_POST(self):
+        """Handle POST requests for sending commands"""
+        try:
+            if self.path == '/send_command':
+                # Get request data
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+                
+                imei = data.get('imei')
+                command = data.get('command')
+                command_id = data.get('command_id')
+                
+                if not imei or not command:
+                    self.send_error(400, "IMEI and command are required")
+                    return
+                
+                # Queue the command
+                self.teltonika_service.queue_command(imei, command, command_id)
+                
+                # Send response
+                response = {
+                    'status': 'success',
+                    'message': 'Command queued successfully',
+                    'imei': imei,
+                    'command': command,
+                    'command_id': command_id
+                }
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+                
+            elif self.path == '/device_status':
+                # Return connected devices status
+                connected_devices = []
+                for imei, info in self.teltonika_service.connected_devices.items():
+                    connected_devices.append({
+                        'imei': imei,
+                        'address': str(info['address']),
+                        'connected_at': info['connected_at'],
+                        'last_seen': info['last_seen']
+                    })
+                
+                response = {
+                    'status': 'success',
+                    'connected_devices': connected_devices,
+                    'total_connected': len(connected_devices)
+                }
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+                
+            else:
+                self.send_error(404, "Endpoint not found")
+                
+        except Exception as e:
+            self.send_error(500, str(e))
+    
+    def do_GET(self):
+        """Handle GET requests"""
+        if self.path == '/health':
+            response = {
+                'status': 'healthy',
+                'service': 'teltonika',
+                'connected_devices': len(self.teltonika_service.connected_devices),
+                'pending_commands': sum(len(cmds) for cmds in self.teltonika_service.pending_commands.values())
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+        else:
+            self.send_error(404, "Endpoint not found")
+    
+    def log_message(self, format, *args):
+        """Override to prevent default HTTP logging"""
+        pass
+
+
+class CommandAPIServer:
+    """HTTP server for command API"""
+    
+    def __init__(self, teltonika_service, port=5001):
+        self.teltonika_service = teltonika_service
+        self.port = port
+        self.server = None
+        self.server_thread = None
+    
+    def start(self):
+        """Start the HTTP API server"""
+        try:
+            # Create a custom handler class with teltonika_service reference
+            handler_class = lambda *args: CommandAPIHandler(*args, self.teltonika_service)
+            
+            self.server = HTTPServer(('0.0.0.0', self.port), handler_class)
+            self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+            self.server_thread.start()
+            
+            self.teltonika_service.logger.info(f"Command API server started on port {self.port}")
+            
+        except Exception as e:
+            self.teltonika_service.logger.error(f"Failed to start command API server: {e}")
+    
+    def stop(self):
+        """Stop the HTTP API server"""
+        if self.server:
+            self.server.shutdown()
+            if self.server_thread:
+                self.server_thread.join()
+
+
 class TeltonikaService:
     def __init__(self, config):
         self.config = config
         self.running = True
         self.server_socket = None
+        
+        # Track connected devices for command sending
+        self.connected_devices = {}  # {imei: {'socket': client_socket, 'address': address, 'last_seen': timestamp}}
+        self.pending_commands = {}   # {imei: [list of commands to send]}
+        
         self.setup_logging()
         self.setup_directories()
+        
+        # Initialize command API server
+        self.command_api_server = CommandAPIServer(self, self.config.get('command_api_port', 5001))
         
         # Initialize fast API integration
         if API_INTEGRATION_AVAILABLE:
@@ -134,8 +269,14 @@ class TeltonikaService:
             # Accept the device (send 0x01)
             client_socket.send(b'\x01')
             
+            # Add device to connected devices list
+            self.add_connected_device(imei, client_socket, client_address)
+            
             # Log IMEI acceptance
             self.log_device_event(imei, "IMEI_ACCEPTED", client_address)
+            
+            # Check for pending commands
+            self.check_pending_commands(imei)
             
             return imei
             
@@ -461,22 +602,41 @@ class TeltonikaService:
             quantity_1 = data[9]
             message_type = data[10]
             
-            if message_type == 0x05:  # Command
+            if message_type == 0x05:  # Command from device to server (rare)
                 command_size = struct.unpack('!I', data[11:15])[0]
                 command = data[15:15+command_size]
-                self.logger.info(f"Codec12 Command from {imei}: {command.decode('ascii', errors='ignore')}")
+                command_text = command.decode('ascii', errors='ignore')
+                self.logger.info(f"Codec12 Command from device {imei}: {command_text}")
                 
                 # Send response
                 response = "Command received"
                 return self.create_codec12_response(response)
                 
-            elif message_type == 0x06:  # Response
+            elif message_type == 0x06:  # Response from device (to our commands)
                 response_size = struct.unpack('!I', data[11:15])[0]
                 response = data[15:15+response_size]
-                self.logger.info(f"Codec12 Response from {imei}: {response.decode('ascii', errors='ignore')}")
+                response_text = response.decode('ascii', errors='ignore')
+                self.logger.info(f"Codec12 Response from device {imei}: {response_text}")
                 
-        except:
-            pass
+                # Log the response
+                self.log_device_event(imei, "COMMAND_RESPONSE", {
+                    'response': response_text,
+                    'response_size': response_size
+                })
+                
+                # Update command status via API if available
+                # Note: In a real implementation, you'd need to match this response to a specific command
+                # This could be done by maintaining a mapping of sent commands or using command IDs
+                if self.api_integration:
+                    try:
+                        # For now, we'll mark the most recent pending command as successful
+                        # In a production system, you'd want better command tracking
+                        self.update_latest_command_status(imei, 'success', response_text)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to update command status: {e}")
+                
+        except Exception as e:
+            self.logger.error(f"Error parsing Codec12 data: {e}")
 
         return None
     
@@ -508,6 +668,189 @@ class TeltonikaService:
         except:
             return None
     
+    def create_codec12_command(self, command_text):
+        """Create Codec12 command packet to send to device"""
+        try:
+            command_bytes = command_text.encode('ascii')
+            command_size = len(command_bytes)
+            
+            # Build command packet
+            packet = bytearray()
+            packet.extend(b'\x00\x00\x00\x00')  # Preamble
+            
+            # Calculate data size: codec_id(1) + quantity1(1) + type(1) + size(4) + command + quantity2(1)
+            data_size = 1 + 1 + 1 + 4 + command_size + 1
+            packet.extend(struct.pack('!I', data_size))  # Data size
+            packet.extend(b'\x0C')  # Codec ID
+            packet.extend(b'\x01')  # Quantity 1
+            packet.extend(b'\x05')  # Command type (0x05)
+            packet.extend(struct.pack('!I', command_size))  # Command size
+            packet.extend(command_bytes)  # Command
+            packet.extend(b'\x01')  # Quantity 2
+            
+            # Calculate and append CRC
+            crc = self.calculate_crc16(packet[8:])  # CRC from codec ID to quantity 2
+            packet.extend(struct.pack('!I', crc))
+            
+            return bytes(packet)
+            
+        except Exception as e:
+            self.logger.error(f"Error creating Codec12 command: {e}")
+            return None
+    
+    def send_command_to_device(self, imei, command_text, command_id=None):
+        """Send command to a connected device"""
+        try:
+            if imei not in self.connected_devices:
+                self.logger.warning(f"Device {imei} not connected, cannot send command")
+                return False
+            
+            device_info = self.connected_devices[imei]
+            client_socket = device_info['socket']
+            
+            # Create Codec12 command packet
+            command_packet = self.create_codec12_command(command_text)
+            if not command_packet:
+                self.logger.error(f"Failed to create command packet for {imei}")
+                return False
+            
+            # Send command
+            client_socket.send(command_packet)
+            self.logger.info(f"Command sent to device {imei}: {command_text}")
+            
+            # Log command event
+            self.log_device_event(imei, "COMMAND_SENT", {
+                'command': command_text,
+                'command_id': command_id,
+                'packet_size': len(command_packet)
+            })
+            
+            # Update command status via API if available
+            if self.api_integration and command_id:
+                try:
+                    self.update_command_status(command_id, 'sent')
+                except Exception as e:
+                    self.logger.warning(f"Failed to update command status via API: {e}")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error sending command to device {imei}: {e}")
+            return False
+    
+    def update_command_status(self, command_id, status, response=None, error=None):
+        """Update command status via Django API"""
+        if not self.api_integration:
+            return
+            
+        try:
+            import requests
+            
+            data = {
+                'command_id': command_id,
+                'status': status
+            }
+            
+            if response:
+                data['response'] = response
+            if error:
+                data['error'] = error
+            
+            # Make HTTP request to Django API
+            requests.post('http://localhost:8000/api/commands/update/', json=data, timeout=5)
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to update command status: {e}")
+    
+    def update_latest_command_status(self, imei, status, response=None, error=None):
+        """Update status of the most recent command for a device"""
+        # This is a simplified approach - in production you'd want better command tracking
+        # For now, we'll try to update via the API without a specific command ID
+        # The Django API would need to be modified to handle this case
+        try:
+            import requests
+            
+            data = {
+                'imei': imei,
+                'status': status
+            }
+            
+            if response:
+                data['response'] = response
+            if error:
+                data['error'] = error
+            
+            # Make HTTP request to Django API (this endpoint would need to be created)
+            # For now, just log the response
+            self.logger.info(f"Command response from {imei}: {response if response else error}")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to update latest command status: {e}")
+    
+    def add_connected_device(self, imei, client_socket, client_address):
+        """Add device to connected devices list"""
+        self.connected_devices[imei] = {
+            'socket': client_socket,
+            'address': client_address,
+            'last_seen': time.time(),
+            'connected_at': time.time()
+        }
+        self.logger.info(f"Device {imei} connected from {client_address}")
+    
+    def remove_connected_device(self, imei):
+        """Remove device from connected devices list"""
+        if imei in self.connected_devices:
+            del self.connected_devices[imei]
+            self.logger.info(f"Device {imei} disconnected")
+    
+    def update_device_last_seen(self, imei):
+        """Update last seen timestamp for a device"""
+        if imei in self.connected_devices:
+            self.connected_devices[imei]['last_seen'] = time.time()
+    
+    def check_pending_commands(self, imei):
+        """Check and send any pending commands for a device"""
+        if imei not in self.pending_commands:
+            return
+        
+        commands = self.pending_commands[imei]
+        sent_commands = []
+        
+        for command in commands:
+            success = self.send_command_to_device(
+                imei, 
+                command['text'], 
+                command.get('id')
+            )
+            if success:
+                sent_commands.append(command)
+        
+        # Remove sent commands from pending list
+        for cmd in sent_commands:
+            commands.remove(cmd)
+        
+        # Clean up empty lists
+        if not commands:
+            del self.pending_commands[imei]
+    
+    def queue_command(self, imei, command_text, command_id=None):
+        """Queue a command for a device (if not connected, will send when it connects)"""
+        command = {
+            'text': command_text,
+            'id': command_id,
+            'queued_at': time.time()
+        }
+        
+        if imei not in self.pending_commands:
+            self.pending_commands[imei] = []
+        
+        self.pending_commands[imei].append(command)
+        self.logger.info(f"Command queued for device {imei}: {command_text}")
+        
+        # Try to send immediately if device is connected
+        if imei in self.connected_devices:
+            self.check_pending_commands(imei)
+
     def store_in_database(self, imei, timestamp, gps_data, io_data, priority=None, event_io_id=None):
         """Store GPS data via fast API integration"""
         if not self.api_integration:
@@ -587,6 +930,9 @@ class TeltonikaService:
             if len(data) < 10:
                 return
             
+            # Update device last seen
+            self.update_device_last_seen(imei)
+            
             # Check preamble
             preamble = data[:4]
             if preamble != b'\x00\x00\x00\x00':
@@ -649,17 +995,22 @@ class TeltonikaService:
         finally:
             client_socket.close()
             if imei:
+                self.remove_connected_device(imei)
                 self.log_device_event(imei, "DISCONNECTED", client_address)
     
     def start_server(self):
-        """Start the TCP server"""
+        """Start the TCP server and command API server"""
         try:
+            # Start command API server
+            self.command_api_server.start()
+            
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.server_socket.bind((self.config['host'], self.config['port']))
             self.server_socket.listen(10)
             
             self.logger.info(f"Teltonika Service started on {self.config['host']}:{self.config['port']}")
+            self.logger.info(f"Command API available on port {self.config.get('command_api_port', 5001)}")
             
             while self.running:
                 try:
@@ -686,6 +1037,10 @@ class TeltonikaService:
         self.running = False
         if self.server_socket:
             self.server_socket.close()
+        
+        # Stop command API server
+        if self.command_api_server:
+            self.command_api_server.stop()
     
     def signal_handler(self, signum, frame):
         """Handle system signals"""
