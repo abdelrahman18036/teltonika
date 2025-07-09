@@ -525,6 +525,18 @@ case "$1" in
         echo "Available commands: lock, unlock, mobilize, immobilize"
         echo "Command types: digital_output, can_control"
         echo ""
+        echo "📱 Digital Output Commands:"
+        echo "   - lock: setdigout 10     # Turn ON DOUT1 (door lock), turn OFF DOUT2"
+        echo "   - unlock: setdigout 01   # Turn OFF DOUT1 (door unlock), turn ON DOUT2"
+        echo "   - mobilize: setdigout ?1 # Ignore DOUT1, turn ON DOUT2 (engine enable)"
+        echo "   - immobilize: setdigout ?0 # Ignore DOUT1, turn OFF DOUT2 (engine disable)"
+        echo ""
+        echo "🚗 CAN Control Commands:"
+        echo "   - lock: lvcanlockalldoors"
+        echo "   - unlock: lvcanopenalldoors"
+        echo "   - mobilize: lvcanunblockengine"
+        echo "   - immobilize: lvcanblockengine"
+        echo ""
         read -p "Enter device IMEI: " imei
         read -p "Enter command type (digital_output/can_control): " cmd_type
         read -p "Enter command name (lock/unlock/mobilize/immobilize): " cmd_name
