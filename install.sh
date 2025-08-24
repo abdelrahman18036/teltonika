@@ -66,7 +66,10 @@ fi
 
 # Create directories
 echo "📁 Creating directories..."
-mkdir -p /opt/teltonika/{service,django,logs,data}
+mkdir -p /opt/teltonika/service
+mkdir -p /opt/teltonika/django
+mkdir -p /opt/teltonika/logs
+mkdir -p /opt/teltonika/data
 mkdir -p /var/log/teltonika
 mkdir -p /var/lib/teltonika
 
