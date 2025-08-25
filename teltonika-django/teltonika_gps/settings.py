@@ -157,7 +157,12 @@ CORS_ALLOW_ALL_ORIGINS = True  # For development
 CORS_ALLOW_CREDENTIALS = True
 
 # Security settings for production (can be enabled later)
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000', 
+    'http://127.0.0.1:8000',
+    'http://151.106.112.187:8000',
+    'http://151.106.112.187'
+]
 
 # Logging configuration
 LOGGING = {

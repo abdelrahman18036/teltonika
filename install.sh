@@ -237,7 +237,7 @@ Type=simple
 User=teltonika
 Group=teltonika
 WorkingDirectory=/opt/teltonika/django
-ExecStart=/opt/teltonika/venv/bin/gunicorn --bind 127.0.0.1:8000 --workers 4 --timeout 120 teltonika_gps.wsgi:application
+ExecStart=/opt/teltonika/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 teltonika_gps.wsgi:application
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -336,6 +336,7 @@ ufw allow 80/tcp    # HTTP
 ufw allow 443/tcp   # HTTPS
 ufw allow 5000/tcp  # Teltonika GPS service
 ufw allow 5001/tcp  # Teltonika command API
+ufw allow 8000/tcp  # Django API direct access
 ufw --force enable
 
 echo "✅ Firewall configured"
