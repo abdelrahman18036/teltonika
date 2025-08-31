@@ -67,7 +67,7 @@ case "$1" in
             fi
             
             echo "🚀 Sending custom command: $custom_cmd"
-            RESPONSE=$(curl -s -X POST "http://127.0.0.1:8000/api/devices/$imei/command/" \
+            RESPONSE=$(curl -s -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
                  -H "Content-Type: application/json" \
                  -d "{\"custom_command\": \"$custom_cmd\"}")
             
@@ -80,7 +80,7 @@ case "$1" in
             read -p "Enter command name (lock/unlock/mobilize/immobilize): " cmd_name
             
             echo "🚀 Sending predefined command..."
-            RESPONSE=$(curl -s -X POST "http://127.0.0.1:8000/api/devices/$imei/command/" \
+            RESPONSE=$(curl -s -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
                  -H "Content-Type: application/json" \
                  -d "{\"command_type\": \"$cmd_type\", \"command_name\": \"$cmd_name\"}")
             
