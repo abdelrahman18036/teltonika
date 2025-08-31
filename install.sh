@@ -556,18 +556,28 @@ case "$1" in
             fi
             
             echo "🚀 Sending custom command: $custom_cmd"
-            curl -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
+            RESPONSE=$(curl -s -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
                  -H "Content-Type: application/json" \
-                 -d "{\"command_type\": \"custom\", \"command_name\": \"$cmd_name\", \"custom_command\": \"$custom_cmd\"}" \
-                 2>/dev/null | python3 -m json.tool
+                 -d "{\"command_type\": \"custom\", \"command_name\": \"$cmd_name\", \"custom_command\": \"$custom_cmd\"}")
+            
+            if [ -n "$RESPONSE" ]; then
+                echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "Response: $RESPONSE"
+            else
+                echo "✅ Command sent (no response data)"
+            fi
         else
             read -p "Enter command name (lock/unlock/mobilize/immobilize): " cmd_name
             
             echo "🚀 Sending predefined command..."
-            curl -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
+            RESPONSE=$(curl -s -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
                  -H "Content-Type: application/json" \
-                 -d "{\"command_type\": \"$cmd_type\", \"command_name\": \"$cmd_name\"}" \
-                 2>/dev/null | python3 -m json.tool
+                 -d "{\"command_type\": \"$cmd_type\", \"command_name\": \"$cmd_name\"}")
+            
+            if [ -n "$RESPONSE" ]; then
+                echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "Response: $RESPONSE"
+            else
+                echo "✅ Command sent (no response data)"
+            fi
         fi
         ;;
     logs)
