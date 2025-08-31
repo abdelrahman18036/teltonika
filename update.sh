@@ -225,6 +225,14 @@ chmod 755 /opt/teltonika
 chmod 755 /var/log/teltonika
 chmod 755 /var/lib/teltonika
 
+# Update teltonika command tool with custom command support
+print_status "Updating teltonika command tool..."
+if [ -f "$REPO_DIR/teltonika_updated.sh" ]; then
+    cp $REPO_DIR/teltonika_updated.sh /usr/local/bin/teltonika
+    chmod +x /usr/local/bin/teltonika
+    print_status "Teltonika command tool updated with custom command support"
+fi
+
 # Step 10: Start services
 print_status "Starting services..."
 systemctl enable $DJANGO_SERVICE
