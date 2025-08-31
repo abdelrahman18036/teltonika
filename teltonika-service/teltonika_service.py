@@ -30,9 +30,20 @@ import json
 import os
 import signal
 import sys
+import socket
+import struct
+import threading
+import time
+import logging
+import json
+import os
+import signal
+import sys
+import requests
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.parse
 import urllib.parse
 
 # Django API integration
@@ -74,13 +85,14 @@ class CommandAPIHandler(BaseHTTPRequestHandler):
                 imei = data.get('imei')
                 command = data.get('command')
                 command_id = data.get('command_id')
+                command_type = data.get('command_type', 'unknown')
                 
                 if not imei or not command:
                     self.send_error(400, "IMEI and command are required")
                     return
                 
-                # Queue the command
-                self.teltonika_service.queue_command(imei, command, command_id)
+                # Queue the command with type information
+                self.teltonika_service.queue_command(imei, command, command_id, command_type)
                 
                 # Send response
                 response = {
@@ -88,7 +100,8 @@ class CommandAPIHandler(BaseHTTPRequestHandler):
                     'message': 'Command queued successfully',
                     'imei': imei,
                     'command': command,
-                    'command_id': command_id
+                    'command_id': command_id,
+                    'command_type': command_type
                 }
                 
                 self.send_response(200)
@@ -693,6 +706,8 @@ class TeltonikaService:
     def try_command_fallback(self, imei, failed_command_id, command_info):
         """Try to send equivalent command using alternative stream"""
         try:
+            original_command = command_info['command_text']
+            
             # Map CAN commands to Digital Output equivalents using helper function
             can_to_digital_map = {
                 'lvcanlockalldoors': self.create_digital_output_command('lock'),        # setdigout 1?? 2??
@@ -701,7 +716,6 @@ class TeltonikaService:
                 'lvcanunblockengine': self.create_digital_output_command('mobilize')    # setdigout ??1
             }
             
-            original_command = command_info['command_text']
             fallback_command = can_to_digital_map.get(original_command)
             
             if fallback_command:
@@ -718,6 +732,12 @@ class TeltonikaService:
                     return True
                 else:
                     self.logger.error(f"Fallback command failed to send to device {imei}")
+            else:
+                # For custom commands, log that no fallback is available
+                if 'custom' in command_info.get('command_type', '').lower():
+                    self.logger.info(f"No fallback available for custom command: {original_command}")
+                else:
+                    self.logger.warning(f"No fallback mapping found for command: {original_command}")
                     
             return False
             
@@ -772,6 +792,32 @@ class TeltonikaService:
         
         return commands.get(action_type, 'setdigout ???')
     
+    def handle_custom_command(self, command_text):
+        """
+        Handle custom commands - validate and prepare them for sending
+        
+        Args:
+            command_text: The raw command text to send to device
+            
+        Returns:
+            str: Processed command text ready to send
+        """
+        # Basic validation for common Teltonika commands
+        command_text = command_text.strip()
+        
+        # Log the custom command
+        self.logger.info(f"Processing custom command: {command_text}")
+        
+        # Add basic validation for known dangerous commands
+        dangerous_commands = ['reboot', 'reset', 'factoryreset']
+        command_lower = command_text.lower()
+        
+        if any(dangerous in command_lower for dangerous in dangerous_commands):
+            self.logger.warning(f"Potentially dangerous custom command detected: {command_text}")
+        
+        # Return the command as-is for custom commands
+        return command_text
+    
     def create_codec12_command(self, command_text):
         """Create Codec12 command packet to send to device"""
         try:
@@ -802,7 +848,7 @@ class TeltonikaService:
             self.logger.error(f"Error creating Codec12 command: {e}")
             return None
     
-    def send_command_to_device(self, imei, command_text, command_id=None):
+    def send_command_to_device(self, imei, command_text, command_id=None, command_type=None):
         """Send command to a connected device"""
         try:
             if imei not in self.connected_devices:
@@ -811,6 +857,10 @@ class TeltonikaService:
 
             device_info = self.connected_devices[imei]
             client_socket = device_info['socket']
+            
+            # Process custom commands if needed
+            if command_type == 'custom':
+                command_text = self.handle_custom_command(command_text)
             
             # Create Codec12 command packet
             command_packet = self.create_codec12_command(command_text)
@@ -828,6 +878,7 @@ class TeltonikaService:
                     self.active_commands[imei] = {}
                 self.active_commands[imei][command_id] = {
                     'command_text': command_text,
+                    'command_type': command_type or 'unknown',
                     'sent_at': time.time(),
                     'status': 'sent'
                 }
@@ -899,7 +950,8 @@ class TeltonikaService:
             success = self.send_command_to_device(
                 imei, 
                 command['text'], 
-                command.get('id')
+                command.get('id'),
+                command.get('type', 'unknown')
             )
             if success:
                 sent_commands.append(command)
@@ -912,11 +964,12 @@ class TeltonikaService:
         if not commands:
             del self.pending_commands[imei]
     
-    def queue_command(self, imei, command_text, command_id=None):
+    def queue_command(self, imei, command_text, command_id=None, command_type=None):
         """Queue a command for a device (if not connected, will send when it connects)"""
         command = {
             'text': command_text,
             'id': command_id,
+            'type': command_type or 'unknown',
             'queued_at': time.time()
         }
         
@@ -924,7 +977,12 @@ class TeltonikaService:
             self.pending_commands[imei] = []
         
         self.pending_commands[imei].append(command)
-        self.logger.info(f"Command queued for device {imei}: {command_text}")
+        
+        # Log differently for custom commands
+        if command_type == 'custom':
+            self.logger.info(f"Custom command queued for device {imei}: {command_text}")
+        else:
+            self.logger.info(f"Command queued for device {imei}: {command_text}")
         
         # Try to send immediately if device is connected
         if imei in self.connected_devices:

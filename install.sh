@@ -526,14 +526,14 @@ case "$1" in
         ;;
     command)
         echo "📱 Testing Command API functionality..."
-        echo "Available commands: lock, unlock, mobilize, immobilize"
-        echo "Command types: digital_output, can_control"
+        echo "Available commands: lock, unlock, mobilize, immobilize, custom"
+        echo "Command types: digital_output, can_control, custom"
         echo ""
         echo "📱 Digital Output Commands:"
         echo "   - lock: setdigout 1?? 2??     # Lock doors - DOUT1=HIGH, additional parameter"
-echo "   - unlock: setdigout ?1? ?2?   # Unlock doors - DOUT2=HIGH, additional parameter"
-echo "   - mobilize: setdigout ??1     # Mobilize engine - DOUT3=HIGH"
-echo "   - immobilize: setdigout ??0   # Immobilize engine - DOUT3=LOW"
+        echo "   - unlock: setdigout ?1? ?2?   # Unlock doors - DOUT2=HIGH, additional parameter"
+        echo "   - mobilize: setdigout ??1     # Mobilize engine - DOUT3=HIGH"
+        echo "   - immobilize: setdigout ??0   # Immobilize engine - DOUT3=LOW"
         echo ""
         echo "🚗 CAN Control Commands:"
         echo "   - lock: lvcanlockalldoors"
@@ -541,15 +541,34 @@ echo "   - immobilize: setdigout ??0   # Immobilize engine - DOUT3=LOW"
         echo "   - mobilize: lvcanunblockengine"
         echo "   - immobilize: lvcanblockengine"
         echo ""
+        echo "⚙️  Custom Commands:"
+        echo "   - Any Teltonika command (e.g., getstatus, getver, setdigout 123)"
+        echo ""
         read -p "Enter device IMEI: " imei
-        read -p "Enter command type (digital_output/can_control): " cmd_type
-        read -p "Enter command name (lock/unlock/mobilize/immobilize): " cmd_name
+        read -p "Enter command type (digital_output/can_control/custom): " cmd_type
         
-        echo "🚀 Sending command..."
-        curl -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
-             -H "Content-Type: application/json" \
-             -d "{\"command_type\": \"$cmd_type\", \"command_name\": \"$cmd_name\"}" \
-             2>/dev/null | python3 -m json.tool
+        if [ "$cmd_type" = "custom" ]; then
+            read -p "Enter custom command: " custom_cmd
+            read -p "Enter command name (optional, will use command as name): " cmd_name
+            
+            if [ -z "$cmd_name" ]; then
+                cmd_name="$custom_cmd"
+            fi
+            
+            echo "🚀 Sending custom command: $custom_cmd"
+            curl -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
+                 -H "Content-Type: application/json" \
+                 -d "{\"command_type\": \"custom\", \"command_name\": \"$cmd_name\", \"custom_command\": \"$custom_cmd\"}" \
+                 2>/dev/null | python3 -m json.tool
+        else
+            read -p "Enter command name (lock/unlock/mobilize/immobilize): " cmd_name
+            
+            echo "🚀 Sending predefined command..."
+            curl -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
+                 -H "Content-Type: application/json" \
+                 -d "{\"command_type\": \"$cmd_type\", \"command_name\": \"$cmd_name\"}" \
+                 2>/dev/null | python3 -m json.tool
+        fi
         ;;
     logs)
         echo "📋 Choose log to view:"

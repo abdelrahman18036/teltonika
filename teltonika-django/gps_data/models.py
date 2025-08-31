@@ -243,6 +243,7 @@ class DeviceCommand(models.Model):
     COMMAND_TYPE_CHOICES = [
         ('digital_output', 'Digital Output Stream'),
         ('can_control', 'CAN Control Stream'),
+        ('custom', 'Custom Command'),
     ]
     
     # Specific command choices for each stream type
@@ -271,8 +272,8 @@ class DeviceCommand(models.Model):
     # Basic information
     device = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='commands')
     command_type = models.CharField(max_length=20, choices=COMMAND_TYPE_CHOICES)
-    command_name = models.CharField(max_length=20, help_text="lock, unlock, mobilize, immobilize")
-    command_text = models.CharField(max_length=100, help_text="The actual command sent to device")
+    command_name = models.CharField(max_length=50, help_text="lock, unlock, mobilize, immobilize, or custom command name")
+    command_text = models.CharField(max_length=200, help_text="The actual command sent to device")
     
     # Status tracking
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
@@ -289,6 +290,7 @@ class DeviceCommand(models.Model):
     # Additional metadata
     retry_count = models.IntegerField(default=0)
     max_retries = models.IntegerField(default=3)
+    is_custom_command = models.BooleanField(default=False, help_text="True if this is a custom command")
     
     class Meta:
         db_table = 'device_commands'
@@ -342,8 +344,11 @@ class DeviceCommand(models.Model):
         self.save(update_fields=['retry_count', 'status'])
     
     @classmethod
-    def get_command_text(cls, command_type, command_name):
+    def get_command_text(cls, command_type, command_name, custom_text=None):
         """Get the actual command text to send to device"""
+        if command_type == 'custom':
+            return custom_text or command_name
+            
         command_map = {
             'digital_output': {
                 'lock': 'setdigout 1?? 2??',     # Lock doors - DOUT1=HIGH, additional parameter

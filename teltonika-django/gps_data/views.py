@@ -321,37 +321,60 @@ class DeviceCommandView(APIView):
             # Extract command parameters
             command_type = request.data.get('command_type')
             command_name = request.data.get('command_name')
+            custom_command = request.data.get('custom_command')  # For custom commands
             
             # Validate inputs
-            if not command_type or not command_name:
+            if not command_type:
                 return Response({
                     'status': 'error',
-                    'message': 'command_type and command_name are required'
+                    'message': 'command_type is required'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Validate command type
-            valid_types = ['digital_output', 'can_control']
-            if command_type not in valid_types:
-                return Response({
-                    'status': 'error',
-                    'message': f'command_type must be one of: {valid_types}'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Validate command name
-            valid_commands = ['lock', 'unlock', 'mobilize', 'immobilize']
-            if command_name not in valid_commands:
-                return Response({
-                    'status': 'error',
-                    'message': f'command_name must be one of: {valid_commands}'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Get the actual command text
-            command_text = DeviceCommand.get_command_text(command_type, command_name)
-            if not command_text:
-                return Response({
-                    'status': 'error',
-                    'message': 'Invalid command combination'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            # Handle custom commands
+            if command_type == 'custom':
+                if not custom_command:
+                    return Response({
+                        'status': 'error',
+                        'message': 'custom_command is required for custom command type'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                command_text = custom_command
+                command_name = command_name or custom_command
+                is_custom = True
+                
+            else:
+                # Handle predefined commands
+                if not command_name:
+                    return Response({
+                        'status': 'error',
+                        'message': 'command_name is required for predefined commands'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Validate command type
+                valid_types = ['digital_output', 'can_control']
+                if command_type not in valid_types:
+                    return Response({
+                        'status': 'error',
+                        'message': f'command_type must be one of: {valid_types} or custom'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Validate command name
+                valid_commands = ['lock', 'unlock', 'mobilize', 'immobilize']
+                if command_name not in valid_commands:
+                    return Response({
+                        'status': 'error',
+                        'message': f'command_name must be one of: {valid_commands}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Get the actual command text
+                command_text = DeviceCommand.get_command_text(command_type, command_name)
+                if not command_text:
+                    return Response({
+                        'status': 'error',
+                        'message': 'Invalid command combination'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                is_custom = False
             
             # Create command record
             command = DeviceCommand.objects.create(
@@ -359,19 +382,22 @@ class DeviceCommandView(APIView):
                 command_type=command_type,
                 command_name=command_name,
                 command_text=command_text,
-                status='pending'
+                status='pending',
+                is_custom_command=is_custom
             )
             
             # Try to send command to device via teltonika service
             try:
-                success = self.send_command_to_service(imei, command_text, command.id)
+                success = self.send_command_to_service(imei, command_text, command.id, command_type)
                 if success:
                     command.mark_sent()
                     return Response({
                         'status': 'success',
                         'message': 'Command sent successfully',
                         'command_id': command.id,
-                        'command_text': command_text
+                        'command_text': command_text,
+                        'command_type': command_type,
+                        'is_custom': is_custom
                     }, status=status.HTTP_200_OK)
                 else:
                     command.mark_failed('Failed to send command to teltonika service')
@@ -396,16 +422,17 @@ class DeviceCommandView(APIView):
                 'message': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    def send_command_to_service(self, imei, command_text, command_id):
+    def send_command_to_service(self, imei, command_text, command_id, command_type=None):
         """Send command to teltonika service via HTTP API"""
         try:
-            logger.info(f"Sending command to device {imei}: {command_text} (command_id: {command_id})")
+            logger.info(f"Sending command to device {imei}: {command_text} (command_id: {command_id}, type: {command_type})")
             
             # Send HTTP request to teltonika service command API
             response = requests.post('http://localhost:5001/send_command', json={
                 'imei': imei,
                 'command': command_text,
-                'command_id': command_id
+                'command_id': command_id,
+                'command_type': command_type or 'unknown'
             }, timeout=10)
             
             if response.status_code == 200:
@@ -446,7 +473,8 @@ class DeviceCommandView(APIView):
                     'device_response': cmd.device_response,
                     'error_message': cmd.error_message,
                     'retry_count': cmd.retry_count,
-                    'duration': cmd.duration
+                    'duration': cmd.duration,
+                    'is_custom_command': cmd.is_custom_command
                 })
             
             return Response({
