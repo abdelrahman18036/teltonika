@@ -51,11 +51,36 @@ fi
 print_status "Repository found at $REPO_DIR"
 
 # Check if teltonika user exists
-if ! id "$TELTONIKA_USER" &>/dev/null; then
-    print_error "User '$TELTONIKA_USER' does not exist!"
-    print_error "It seems the original installation was not completed properly."
-    print_error "Please run the install.sh script first."
+if ! getent passwd "$TELTONIKA_USER" >/dev/null 2>&1; then
+    print_warning "User '$TELTONIKA_USER' may not exist, attempting to create..."
+    if ! useradd --system --shell /bin/bash --home-dir /opt/teltonika --create-home teltonika 2>/dev/null; then
+        print_status "User '$TELTONIKA_USER' already exists or was created successfully"
+    fi
+fi
+
+# Verify user exists now
+if getent passwd "$TELTONIKA_USER" >/dev/null 2>&1; then
+    print_status "User '$TELTONIKA_USER' verified"
+else
+    print_error "Failed to verify user '$TELTONIKA_USER'"
     exit 1
+fi
+
+# Ensure all required directories exist
+print_status "Ensuring required directories exist..."
+mkdir -p /opt/teltonika/service
+mkdir -p /opt/teltonika/django
+mkdir -p /opt/teltonika/logs
+mkdir -p /opt/teltonika/data
+mkdir -p /var/log/teltonika
+mkdir -p /var/lib/teltonika
+
+# Check if virtual environment exists, create if needed
+if [ ! -d "/opt/teltonika/venv" ]; then
+    print_status "Creating Python virtual environment..."
+    sudo -u $TELTONIKA_USER python3 -m venv /opt/teltonika/venv
+    sudo -u $TELTONIKA_USER /opt/teltonika/venv/bin/pip install --upgrade pip
+    print_status "Virtual environment created"
 fi
 
 # Step 1: Stop services
