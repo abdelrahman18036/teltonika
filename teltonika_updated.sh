@@ -69,7 +69,7 @@ case "$1" in
             echo "🚀 Sending custom command: $custom_cmd"
             RESPONSE=$(curl -s -X POST "http://127.0.0.1:8000/api/devices/$imei/commands/" \
                  -H "Content-Type: application/json" \
-                 -d "{\"custom_command\": \"$custom_cmd\"}")
+                 -d "{\"command_type\": \"custom\", \"command_name\": \"$cmd_name\", \"custom_command\": \"$custom_cmd\"}")
             
             if [ -n "$RESPONSE" ]; then
                 echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "Response: $RESPONSE"
