@@ -1,20 +1,21 @@
 #!/bin/bash
 
-# Teltonika GPS Tracker Update Script (Fixed Version)
+# Teltonika GPS Tracker Update Script (Fixed to match install.sh)
 # This script updates the production deployment with new code changes
-# Usage: bash update_fixed.sh
+# Usage: bash update_fixed_v2.sh
 
 set -e  # Exit on any error
 
 echo "=== Teltonika GPS Tracker Update Script ==="
 echo "Starting update process..."
 
-# Configuration
+# Configuration - MATCHING install.sh exactly
 REPO_DIR="/root/teltonika"
-DJANGO_DIR="/opt/teltonika-django"
-SERVICE_DIR="/opt/teltonika-service"
+DJANGO_DIR="/opt/teltonika/django"
+SERVICE_DIR="/opt/teltonika/service"
 DJANGO_SERVICE="teltonika-django"
 TELTONIKA_SERVICE="teltonika"
+TELTONIKA_USER="teltonika"
 
 # Simple color codes that work in sh
 RED='\033[0;31m'
@@ -49,6 +50,14 @@ fi
 
 print_status "Repository found at $REPO_DIR"
 
+# Check if teltonika user exists
+if ! id "$TELTONIKA_USER" &>/dev/null; then
+    print_error "User '$TELTONIKA_USER' does not exist!"
+    print_error "It seems the original installation was not completed properly."
+    print_error "Please run the install.sh script first."
+    exit 1
+fi
+
 # Step 1: Stop services
 print_status "Stopping services..."
 systemctl stop $DJANGO_SERVICE 2>/dev/null || print_warning "Django service was not running"
@@ -69,9 +78,10 @@ print_status "Backup created at $BACKUP_DIR"
 # Step 3: Copy Django application
 print_status "Updating Django application..."
 if [ -d "$REPO_DIR/teltonika-django" ]; then
-    mkdir -p $DJANGO_DIR
+    # Remove old files and copy new ones
+    rm -rf $DJANGO_DIR/*
     cp -r $REPO_DIR/teltonika-django/* $DJANGO_DIR/
-    chown -R root:root $DJANGO_DIR
+    chown -R $TELTONIKA_USER:$TELTONIKA_USER $DJANGO_DIR
     chmod +x $DJANGO_DIR/manage.py
     print_status "Django application updated"
 else
@@ -82,9 +92,10 @@ fi
 # Step 4: Copy Teltonika service
 print_status "Updating Teltonika service..."
 if [ -d "$REPO_DIR/teltonika-service" ]; then
-    mkdir -p $SERVICE_DIR
+    # Remove old files and copy new ones
+    rm -rf $SERVICE_DIR/*
     cp -r $REPO_DIR/teltonika-service/* $SERVICE_DIR/
-    chown -R root:root $SERVICE_DIR
+    chown -R $TELTONIKA_USER:$TELTONIKA_USER $SERVICE_DIR
     chmod +x $SERVICE_DIR/*.py
     print_status "Teltonika service updated"
 else
@@ -92,45 +103,80 @@ else
     exit 1
 fi
 
-# Step 5: Update systemd service files
+# Step 5: Update systemd service files with ORIGINAL paths
 print_status "Updating systemd service files..."
-if [ -f "$DJANGO_DIR/teltonika-django.service" ]; then
-    cp $DJANGO_DIR/teltonika-django.service /etc/systemd/system/
-    print_status "Django service file updated"
-fi
 
-if [ -f "$SERVICE_DIR/teltonika.service" ]; then
-    cp $SERVICE_DIR/teltonika.service /etc/systemd/system/
-    print_status "Teltonika service file updated"
-fi
+# Create the exact systemd service files from install.sh
+cat > /etc/systemd/system/teltonika.service << 'EOF'
+[Unit]
+Description=Teltonika GPS Tracking Service
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=teltonika
+Group=teltonika
+WorkingDirectory=/opt/teltonika/service
+ExecStart=/opt/teltonika/venv/bin/python teltonika_service.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Performance settings
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/teltonika-django.service << 'EOF'
+[Unit]
+Description=Teltonika Django API
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=teltonika
+Group=teltonika
+WorkingDirectory=/opt/teltonika/django
+ExecStart=/opt/teltonika/venv/bin/gunicorn --bind 0.0.0.0:8000 --workers 4 --timeout 120 teltonika_gps.wsgi:application
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Performance settings
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 systemctl daemon-reload
+print_status "Systemd service files updated with original configuration"
 
-# Step 6: Install Python dependencies (with fallback options)
+# Step 6: Install Python dependencies using the virtual environment
 print_status "Installing Python dependencies..."
 
-install_requirements() {
-    local req_file="$1"
-    local name="$2"
-    
-    if [ -f "$req_file" ]; then
-        print_status "Installing $name requirements..."
-        cd "$(dirname "$req_file")"
-        
-        # Try different methods
-        if pip3 install -r "$req_file" --break-system-packages >/dev/null 2>&1; then
-            print_status "$name dependencies installed successfully"
-        elif pip3 install -r "$req_file" --user >/dev/null 2>&1; then
-            print_status "$name dependencies installed to user directory"
-        else
-            print_warning "Could not install $name dependencies automatically"
-            print_warning "You may need to install manually: pip3 install -r $req_file --break-system-packages"
-        fi
-    fi
-}
+# Install/update Django dependencies
+if [ -f "$DJANGO_DIR/requirements.txt" ]; then
+    print_status "Installing Django requirements..."
+    cd $DJANGO_DIR
+    sudo -u $TELTONIKA_USER /opt/teltonika/venv/bin/pip install -r requirements.txt
+    print_status "Django dependencies installed"
+fi
 
-install_requirements "$DJANGO_DIR/requirements.txt" "Django"
-install_requirements "$SERVICE_DIR/requirements.txt" "Service"
+# Install/update service dependencies (if file exists)
+if [ -f "$SERVICE_DIR/requirements.txt" ]; then
+    print_status "Installing service requirements..."
+    cd $SERVICE_DIR
+    sudo -u $TELTONIKA_USER /opt/teltonika/venv/bin/pip install -r requirements.txt
+    print_status "Service dependencies installed"
+fi
 
 # Step 7: Handle database migrations
 print_status "Handling database migrations..."
@@ -138,21 +184,19 @@ cd $DJANGO_DIR
 
 # Make migrations and migrate
 print_status "Creating and applying migrations..."
-python3 manage.py makemigrations || print_warning "No new migrations to create"
-python3 manage.py migrate || print_warning "Migration failed - check manually"
+sudo -u $TELTONIKA_USER /opt/teltonika/venv/bin/python manage.py makemigrations || print_warning "No new migrations to create"
+sudo -u $TELTONIKA_USER /opt/teltonika/venv/bin/python manage.py migrate || print_warning "Migration failed - check manually"
 
-# Step 8: Collect static files (if needed)
-if [ -d "$DJANGO_DIR/static" ] || grep -q "STATIC_" $DJANGO_DIR/*/settings.py 2>/dev/null; then
-    print_status "Collecting static files..."
-    python3 manage.py collectstatic --noinput || print_warning "Static files collection failed"
-fi
+# Step 8: Collect static files
+print_status "Collecting static files..."
+sudo -u $TELTONIKA_USER /opt/teltonika/venv/bin/python manage.py collectstatic --noinput || print_warning "Static files collection failed"
 
-# Step 9: Create necessary directories
+# Step 9: Ensure proper permissions (like install.sh)
 print_status "Setting up directories and permissions..."
-mkdir -p /var/log/teltonika
-mkdir -p /var/lib/teltonika
-chown -R root:root /var/log/teltonika
-chown -R root:root /var/lib/teltonika
+chown -R $TELTONIKA_USER:$TELTONIKA_USER /opt/teltonika
+chown -R $TELTONIKA_USER:$TELTONIKA_USER /var/log/teltonika
+chown -R $TELTONIKA_USER:$TELTONIKA_USER /var/lib/teltonika
+chmod 755 /opt/teltonika
 chmod 755 /var/log/teltonika
 chmod 755 /var/lib/teltonika
 
@@ -218,17 +262,28 @@ fi
 
 # Final status
 print_status "=== Update Complete ==="
+print_status "System updated to match original installation configuration"
 print_status "Backup location: $BACKUP_DIR"
 print_status "Check services with: systemctl status teltonika-django teltonika"
 print_status "View logs with: journalctl -u teltonika-django -u teltonika -f"
+print_status "Monitor system: teltonika monitor"
+print_status "Test commands: teltonika command"
 
 echo ""
+echo "🎉 Update completed successfully!"
+echo ""
+echo "📊 Quick Status Check:"
+echo "   Django API: http://$(hostname -I | awk '{print $1}'):8000/admin/"
+echo "   GPS Service: $(hostname -I | awk '{print $1}'):5000"
+echo "   Command API: $(hostname -I | awk '{print $1}'):5001"
+echo ""
 echo "If you encounter issues:"
-echo "1. Check logs: journalctl -u teltonika-django -f"
-echo "2. Install missing packages: pip3 install package_name --break-system-packages"
+echo "1. Check logs: journalctl -u teltonika -f"
+echo "2. Check permissions: ls -la /var/log/teltonika/"
 echo "3. Restore backup if needed:"
 echo "   systemctl stop teltonika-django teltonika"
 echo "   rm -rf $DJANGO_DIR $SERVICE_DIR"
 echo "   mv $BACKUP_DIR/teltonika-django-backup $DJANGO_DIR"
 echo "   mv $BACKUP_DIR/teltonika-service-backup $SERVICE_DIR"
+echo "   chown -R teltonika:teltonika /opt/teltonika"
 echo "   systemctl start teltonika-django teltonika"
