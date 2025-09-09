@@ -38,10 +38,14 @@ class GPSRecordAdmin(admin.ModelAdmin):
     ]
     list_filter = [
         'device', 'timestamp', 'ignition', 'movement', 
+        'digital_input_1', 'digital_input_2', 'digital_input_3',
         'gnss_status', 'created_at'
     ]
     search_fields = ['device__imei', 'device__device_name']
-    readonly_fields = ['created_at', 'formatted_coordinates', 'security_flags_summary']
+    readonly_fields = [
+        'created_at', 'formatted_coordinates', 'security_flags_summary',
+        'analog_voltage_1', 'analog_voltage_2', 'accelerometer_summary'
+    ]
     date_hierarchy = 'timestamp'
     
     fieldsets = (
@@ -65,9 +69,21 @@ class GPSRecordAdmin(admin.ModelAdmin):
         }),
         ('Digital I/O', {
             'fields': (
-                'digital_input_1', 'digital_output_1', 
-                'digital_output_2', 'digital_output_3'
+                'digital_input_1', 'digital_input_2', 'digital_input_3',
+                'digital_output_1', 'digital_output_2', 'digital_output_3'
             )
+        }),
+        ('Analog Inputs', {
+            'fields': ('analog_input_1', 'analog_voltage_1', 'analog_input_2', 'analog_voltage_2'),
+            'description': 'Analog input values in mV and converted to volts'
+        }),
+        ('Accelerometer Data', {
+            'fields': ('axis_x', 'axis_y', 'axis_z', 'accelerometer_summary'),
+            'description': 'Accelerometer readings in milliG (mG)'
+        }),
+        ('Temperature Sensors', {
+            'fields': ('dallas_temperature_id_4',),
+            'description': 'Dallas temperature sensor IDs'
         }),
         ('Power & Battery', {
             'fields': (
@@ -128,6 +144,32 @@ class GPSRecordAdmin(admin.ModelAdmin):
             return "No data"
         return obj.security_flags_summary
     security_summary.short_description = 'Security'
+    
+    def analog_voltage_1(self, obj):
+        """Display analog input 1 voltage"""
+        if obj.analog_input_1 is None:
+            return "N/A"
+        return f"{obj.analog_input_1/1000:.3f}V"
+    analog_voltage_1.short_description = 'Analog 1'
+    
+    def analog_voltage_2(self, obj):
+        """Display analog input 2 voltage"""
+        if obj.analog_input_2 is None:
+            return "N/A"
+        return f"{obj.analog_input_2/1000:.3f}V"
+    analog_voltage_2.short_description = 'Analog 2'
+    
+    def accelerometer_summary(self, obj):
+        """Display accelerometer readings summary"""
+        if all(x is None for x in [obj.axis_x, obj.axis_y, obj.axis_z]):
+            return "N/A"
+        
+        x = obj.axis_x if obj.axis_x is not None else 0
+        y = obj.axis_y if obj.axis_y is not None else 0
+        z = obj.axis_z if obj.axis_z is not None else 0
+        
+        return f"X:{x} Y:{y} Z:{z} mG"
+    accelerometer_summary.short_description = 'Accelerometer'
 
 
 @admin.register(DeviceStatus)
