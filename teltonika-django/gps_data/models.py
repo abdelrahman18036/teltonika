@@ -55,9 +55,23 @@ class GPSRecord(models.Model):
     
     # Digital I/O
     digital_input_1 = models.BooleanField(null=True, blank=True, help_text="IO001: Digital Input 1")
+    digital_input_2 = models.BooleanField(null=True, blank=True, help_text="IO002: Digital Input 2")
+    digital_input_3 = models.BooleanField(null=True, blank=True, help_text="IO003: Digital Input 3")
     digital_output_1 = models.BooleanField(null=True, blank=True, help_text="IO179: Digital Output 1")
     digital_output_2 = models.BooleanField(null=True, blank=True, help_text="IO180: Digital Output 2")
     digital_output_3 = models.BooleanField(null=True, blank=True, help_text="IO380: Digital Output 3")
+    
+    # Analog Inputs
+    analog_input_1 = models.IntegerField(null=True, blank=True, help_text="IO009: Analog Input 1 (mV)")
+    analog_input_2 = models.IntegerField(null=True, blank=True, help_text="IO006: Analog Input 2 (mV)")
+    
+    # Accelerometer Data (mG - milliG)
+    axis_x = models.IntegerField(null=True, blank=True, help_text="IO017: X axis value (mG)")
+    axis_y = models.IntegerField(null=True, blank=True, help_text="IO018: Y axis value (mG)")
+    axis_z = models.IntegerField(null=True, blank=True, help_text="IO019: Z axis value (mG)")
+    
+    # Dallas Temperature Sensors
+    dallas_temperature_id_4 = models.BigIntegerField(null=True, blank=True, help_text="IO071: Dallas Temperature ID 4")
     
     # Power and Battery
     external_voltage = models.IntegerField(null=True, blank=True, help_text="IO066: External voltage in mV")

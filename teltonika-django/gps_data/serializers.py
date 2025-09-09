@@ -31,12 +31,16 @@ class GPSRecordSerializer(serializers.ModelSerializer):
             'gnss_status', 'gnss_pdop', 'gnss_hdop',
             'ignition', 'movement',
             'gsm_signal', 'active_gsm_operator', 'iccid1', 'iccid2',
-            'digital_input_1', 'digital_output_1', 'digital_output_2', 'digital_output_3',
+            'digital_input_1', 'digital_input_2', 'digital_input_3', 
+            'digital_output_1', 'digital_output_2', 'digital_output_3',
+            'analog_input_1', 'analog_input_2',
+            'axis_x', 'axis_y', 'axis_z', 'dallas_temperature_id_4',
             'external_voltage', 'battery_voltage', 'battery_level', 'battery_current',
             'total_odometer', 'program_number', 'door_status',
             'vehicle_speed_can', 'accelerator_pedal_position', 'engine_rpm_can',
             'total_mileage_can', 'fuel_level_can', 'total_mileage_counted', 'security_state_flags',
-            'other_io_data', 'event_io_id', 'created_at'
+            'other_io_data', 'event_io_id', 'created_at',
+            'security_flags_decoded', 'security_flags_summary'
         ]
         read_only_fields = ['id', 'device', 'created_at']
     
@@ -147,9 +151,17 @@ class BulkGPSRecordSerializer(serializers.Serializer):
                 11: 'iccid1',
                 14: 'iccid2',
                 1: 'digital_input_1',
+                2: 'digital_input_2',
+                3: 'digital_input_3',
                 179: 'digital_output_1',
                 180: 'digital_output_2',
                 380: 'digital_output_3',
+                6: 'analog_input_2',
+                9: 'analog_input_1',
+                17: 'axis_x',
+                18: 'axis_y',
+                19: 'axis_z',
+                71: 'dallas_temperature_id_4',
                 66: 'external_voltage',
                 67: 'battery_voltage',
                 113: 'battery_level',
