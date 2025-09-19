@@ -153,16 +153,16 @@ class GPSRecordAdmin(admin.ModelAdmin):
             if flags:
                 # Show active bits for IO132 Security flags
                 active_bits = []
-                for i in range(16):  # Check first 16 bits
+                for i in range(128):  # Check all 128 bits (16 bytes)
                     if flags & (1 << i):
                         active_bits.append(f"bit{i}")
                 
                 if active_bits:
-                    return f"Security: {', '.join(active_bits[:3])}{'...' if len(active_bits) > 3 else ''}"
+                    return f"Security: {', '.join(active_bits)} (0x{flags:032X})"
                 else:
-                    return "Security: No flags"
+                    return "Security: No flags active"
             else:
-                return "Security: Clear"
+                return "Security: No flags active"
         except:
             return "Security: Error"
     security_summary.short_description = 'Security'
@@ -201,7 +201,7 @@ class GPSRecordAdmin(admin.ModelAdmin):
     dallas_temp_1_formatted.short_description = 'Dallas Temp 1'
     
     def binary_flags_summary(self, obj):
-        """Display binary flags summary with bit-level details"""
+        """Display binary flags summary with bit-level details matching service logs"""
         summaries = []
         
         # Security State Flags P4 (IO517)
@@ -210,20 +210,20 @@ class GPSRecordAdmin(admin.ModelAdmin):
                 flags = int.from_bytes(obj.security_state_flags_p4, byteorder='little')
                 if flags:
                     active_bits = []
-                    for i in range(16):  # Check first 16 bits
+                    for i in range(128):  # Check all 128 bits (16 bytes)
                         if flags & (1 << i):
                             active_bits.append(f"bit{i}")
                     
                     if active_bits:
-                        summaries.append(f"Security P4: {', '.join(active_bits[:5])}{'...' if len(active_bits) > 5 else ''}")
+                        summaries.append(f"Security P4: {', '.join(active_bits)} (0x{flags:032X})")
                     else:
-                        summaries.append("Security P4: No flags")
+                        summaries.append("Security P4: No flags active")
                 else:
-                    summaries.append("Security P4: Clear")
+                    summaries.append("Security P4: No flags active")
             except:
                 summaries.append("Security P4: Error")
         else:
-            summaries.append("Security P4: None")
+            summaries.append("Security P4: No data")
                 
         # Control State Flags P4 (IO518)
         if obj.control_state_flags_p4:
@@ -231,20 +231,20 @@ class GPSRecordAdmin(admin.ModelAdmin):
                 flags = int.from_bytes(obj.control_state_flags_p4, byteorder='little')
                 if flags:
                     active_bits = []
-                    for i in range(16):  # Check first 16 bits
+                    for i in range(128):  # Check all 128 bits (16 bytes)
                         if flags & (1 << i):
                             active_bits.append(f"bit{i}")
                     
                     if active_bits:
-                        summaries.append(f"Control P4: {', '.join(active_bits[:5])}{'...' if len(active_bits) > 5 else ''}")
+                        summaries.append(f"Control P4: {', '.join(active_bits)} (0x{flags:032X})")
                     else:
-                        summaries.append("Control P4: No flags")
+                        summaries.append("Control P4: No flags active")
                 else:
-                    summaries.append("Control P4: Clear")
+                    summaries.append("Control P4: No flags active")
             except:
                 summaries.append("Control P4: Error")
         else:
-            summaries.append("Control P4: None")
+            summaries.append("Control P4: No data")
                 
         # Indicator State Flags P4 (IO519)
         if obj.indicator_state_flags_p4:
@@ -252,20 +252,20 @@ class GPSRecordAdmin(admin.ModelAdmin):
                 flags = int.from_bytes(obj.indicator_state_flags_p4, byteorder='little')
                 if flags:
                     active_bits = []
-                    for i in range(16):  # Check first 16 bits
+                    for i in range(128):  # Check all 128 bits (16 bytes)
                         if flags & (1 << i):
                             active_bits.append(f"bit{i}")
                     
                     if active_bits:
-                        summaries.append(f"Indicator P4: {', '.join(active_bits[:5])}{'...' if len(active_bits) > 5 else ''}")
+                        summaries.append(f"Indicator P4: {', '.join(active_bits)} (0x{flags:032X})")
                     else:
-                        summaries.append("Indicator P4: No flags")
+                        summaries.append("Indicator P4: No flags active")
                 else:
-                    summaries.append("Indicator P4: Clear")
+                    summaries.append("Indicator P4: No flags active")
             except:
                 summaries.append("Indicator P4: Error")
         else:
-            summaries.append("Indicator P4: None")
+            summaries.append("Indicator P4: No data")
         
         if summaries:
             return format_html('<br>'.join(summaries))
