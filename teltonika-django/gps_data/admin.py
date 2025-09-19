@@ -44,7 +44,8 @@ class GPSRecordAdmin(admin.ModelAdmin):
     search_fields = ['device__imei', 'device__device_name']
     readonly_fields = [
         'created_at', 'formatted_coordinates', 'security_flags_summary',
-        'analog_voltage_1', 'analog_voltage_2', 'accelerometer_summary'
+        'analog_voltage_1', 'analog_voltage_2', 'accelerometer_summary',
+        'dallas_temp_1_formatted', 'binary_flags_summary'
     ]
     date_hierarchy = 'timestamp'
     
@@ -82,8 +83,16 @@ class GPSRecordAdmin(admin.ModelAdmin):
             'description': 'Accelerometer readings in milliG (mG)'
         }),
         ('Temperature Sensors', {
-            'fields': ('dallas_temperature_id_4',),
-            'description': 'Dallas temperature sensor IDs'
+            'fields': ('dallas_temperature_1', 'dallas_temp_1_formatted', 'dallas_temperature_id_4'),
+            'description': 'Dallas temperature sensor values and IDs'
+        }),
+        ('State Flags', {
+            'fields': (
+                'security_state_flags', 'security_flags_summary',
+                'security_state_flags_p4', 'control_state_flags_p4', 'indicator_state_flags_p4',
+                'binary_flags_summary'
+            ),
+            'description': 'Security, control, and indicator state flags (binary data)'
         }),
         ('Power & Battery', {
             'fields': (
@@ -99,10 +108,6 @@ class GPSRecordAdmin(admin.ModelAdmin):
                 'vehicle_speed_can', 'accelerator_pedal_position', 'engine_rpm_can',
                 'total_mileage_can', 'fuel_level_can', 'total_mileage_counted'
             )
-        }),
-        ('Security State', {
-            'fields': ('security_state_flags', 'security_flags_summary'),
-            'description': 'Security state flags and decoded information'
         }),
         ('Other Data', {
             'fields': ('other_io_data',),
@@ -142,7 +147,14 @@ class GPSRecordAdmin(admin.ModelAdmin):
         """Display security flags summary in admin list"""
         if obj.security_state_flags is None:
             return "No data"
-        return obj.security_flags_summary
+        try:
+            flags = int.from_bytes(obj.security_state_flags, byteorder='little')
+            if flags:
+                return f"Security: 0x{flags:032X}"
+            else:
+                return "Security: None"
+        except:
+            return "Security: Error"
     security_summary.short_description = 'Security'
     
     def analog_voltage_1(self, obj):
@@ -170,6 +182,44 @@ class GPSRecordAdmin(admin.ModelAdmin):
         
         return f"X:{x} Y:{y} Z:{z} mG"
     accelerometer_summary.short_description = 'Accelerometer'
+    
+    def dallas_temp_1_formatted(self, obj):
+        """Display Dallas Temperature 1 in Celsius"""
+        if obj.dallas_temperature_1 is None:
+            return "N/A"
+        return f"{obj.dallas_temperature_1/10:.1f}°C"
+    dallas_temp_1_formatted.short_description = 'Dallas Temp 1'
+    
+    def binary_flags_summary(self, obj):
+        """Display binary flags summary"""
+        summaries = []
+        
+        if obj.security_state_flags_p4:
+            try:
+                flags = int.from_bytes(obj.security_state_flags_p4, byteorder='little')
+                if flags:
+                    summaries.append(f"Sec P4: 0x{flags:X}")
+            except:
+                pass
+                
+        if obj.control_state_flags_p4:
+            try:
+                flags = int.from_bytes(obj.control_state_flags_p4, byteorder='little')
+                if flags:
+                    summaries.append(f"Ctrl P4: 0x{flags:X}")
+            except:
+                pass
+                
+        if obj.indicator_state_flags_p4:
+            try:
+                flags = int.from_bytes(obj.indicator_state_flags_p4, byteorder='little')
+                if flags:
+                    summaries.append(f"Ind P4: 0x{flags:X}")
+            except:
+                pass
+        
+        return ", ".join(summaries) if summaries else "No P4 flags"
+    binary_flags_summary.short_description = 'P4 Flags'
 
 
 @admin.register(DeviceStatus)

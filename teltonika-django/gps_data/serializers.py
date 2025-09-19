@@ -22,6 +22,9 @@ class GPSRecordSerializer(serializers.ModelSerializer):
     # Read-only computed fields
     security_flags_decoded = serializers.ReadOnlyField()
     security_flags_summary = serializers.ReadOnlyField()
+    security_flags_p4_decoded = serializers.ReadOnlyField()
+    control_flags_p4_decoded = serializers.ReadOnlyField()
+    indicator_flags_p4_decoded = serializers.ReadOnlyField()
     
     class Meta:
         model = GPSRecord
@@ -34,13 +37,15 @@ class GPSRecordSerializer(serializers.ModelSerializer):
             'digital_input_1', 'digital_input_2', 'digital_input_3', 
             'digital_output_1', 'digital_output_2', 'digital_output_3',
             'analog_input_1', 'analog_input_2',
-            'axis_x', 'axis_y', 'axis_z', 'dallas_temperature_id_4',
+            'axis_x', 'axis_y', 'axis_z', 'dallas_temperature_1', 'dallas_temperature_id_4',
             'external_voltage', 'battery_voltage', 'battery_level', 'battery_current',
             'total_odometer', 'program_number', 'door_status',
             'vehicle_speed_can', 'accelerator_pedal_position', 'engine_rpm_can',
             'total_mileage_can', 'fuel_level_can', 'total_mileage_counted', 'security_state_flags',
+            'security_state_flags_p4', 'control_state_flags_p4', 'indicator_state_flags_p4',
             'other_io_data', 'event_io_id', 'created_at',
-            'security_flags_decoded', 'security_flags_summary'
+            'security_flags_decoded', 'security_flags_summary',
+            'security_flags_p4_decoded', 'control_flags_p4_decoded', 'indicator_flags_p4_decoded'
         ]
         read_only_fields = ['id', 'device', 'created_at']
     
@@ -162,6 +167,7 @@ class BulkGPSRecordSerializer(serializers.Serializer):
                 18: 'axis_y',
                 19: 'axis_z',
                 71: 'dallas_temperature_id_4',
+                72: 'dallas_temperature_1',
                 66: 'external_voltage',
                 67: 'battery_voltage',
                 113: 'battery_level',
@@ -176,6 +182,9 @@ class BulkGPSRecordSerializer(serializers.Serializer):
                 89: 'fuel_level_can',
                 105: 'total_mileage_counted',
                 132: 'security_state_flags',
+                517: 'security_state_flags_p4',
+                518: 'control_state_flags_p4',
+                519: 'indicator_state_flags_p4',
             }
             
             for io_id, value in io_params.items():
@@ -183,8 +192,24 @@ class BulkGPSRecordSerializer(serializers.Serializer):
                 
                 if io_id_int in field_mapping:
                     field_name = field_mapping[io_id_int]
+                    
+                    # Handle special conversions
                     if io_id_int in [87, 105]:
                         value = value // 1000  # convert meters to km for readability
+                    elif io_id_int in [132, 517, 518, 519]:  # State flags - convert to binary
+                        # All state flags now use 16 bytes for consistency
+                        bytes_size = 16
+                        
+                        # Convert integer to binary (little-endian)
+                        if isinstance(value, int):
+                            value = value.to_bytes(bytes_size, byteorder='little')
+                        elif isinstance(value, str):
+                            # Handle hex string input
+                            if value.startswith('0x'):
+                                value = int(value, 16).to_bytes(bytes_size, byteorder='little')
+                            else:
+                                value = int(value).to_bytes(bytes_size, byteorder='little')
+                    
                     record_data[field_name] = value
                 else:
                     # Store unknown parameters in other_io_data

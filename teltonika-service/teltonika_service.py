@@ -1354,6 +1354,11 @@ class TeltonikaService:
             107: "Fuel Consumed (counted)", 110: "Fuel Rate (CAN)", 111: "AdBlue Level (%)",
             112: "AdBlue Level (L)", 114: "Engine Load (CAN)", 115: "Engine Temperature",
             132: "Security State Flags",
+            
+            # P4 State Flags (8-byte binary data)
+            517: "Security State Flags P4",
+            518: "Control State Flags P4", 
+            519: "Indicator State Flags P4",
         }
         
         decoded_params = []
@@ -1524,8 +1529,10 @@ class TeltonikaService:
                     formatted_value = f"{value}°C"
                 elif io_id == 59:  
                     formatted_value = f"{value/100:.2f}°"
-                elif io_id == 132:  # Security State Flags
-                    formatted_value = self.format_security_flags(value)
+                elif io_id in [132, 517, 518, 519]:  # All State Flags (16-byte binary)
+                    formatted_value = self.format_binary_flags(value, io_id)
+                elif io_id == 72:  # Dallas Temperature 1 (°C * 10)
+                    formatted_value = f"{value/10:.1f}°C"
                 else:
                     formatted_value = str(value)
                     
@@ -1572,6 +1579,40 @@ class TeltonikaService:
             return f"Security: {', '.join(active_flags)}"
         else:
             return "Security: No flags active"
+
+    def format_binary_flags(self, flags_value, io_id):
+        """Format P4 state flags for display"""
+        if flags_value is None:
+            return "No data"
+        
+        # Convert to 128-bit integer if needed (P4 flags are 16 bytes)
+        if isinstance(flags_value, int):
+            flags = flags_value
+        else:
+            flags = int(flags_value)
+        
+        # Convert to binary representation for storage/transmission (16 bytes for P4)
+        binary_data = flags.to_bytes(16, byteorder='little')
+        
+        flag_names = {
+            132: "Security",
+            517: "Security P4",
+            518: "Control P4", 
+            519: "Indicator P4"
+        }
+        
+        flag_type = flag_names.get(io_id, "Unknown P4")
+        
+        # Show first few active bits for debugging
+        active_bits = []
+        for i in range(16):  # Check first 16 bits
+            if flags & (1 << i):
+                active_bits.append(f"bit{i}")
+        
+        if active_bits:
+            return f"{flag_type}: {', '.join(active_bits)} (0x{flags:032X})"
+        else:
+            return f"{flag_type}: No flags active"
 
     def extract_gps_coordinates(self, data, offset):
         """Extract GPS coordinates using the same method as GPS analysis"""

@@ -71,8 +71,15 @@ class GPSRecord(models.Model):
     axis_z = models.IntegerField(null=True, blank=True, help_text="IO019: Z axis value (mG)")
     
     # Dallas Temperature Sensors
+    dallas_temperature_1 = models.IntegerField(null=True, blank=True, help_text="IO072: Dallas Temperature 1 (°C * 10)")
     dallas_temperature_id_4 = models.BigIntegerField(null=True, blank=True, help_text="IO071: Dallas Temperature ID 4")
     
+    # State Flags (stored as binary data for bit manipulation)
+    security_state_flags_p4 = models.BinaryField(max_length=16, null=True, blank=True, help_text="IO517: Security State Flags P4 (16 bytes binary)")
+    control_state_flags_p4 = models.BinaryField(max_length=16, null=True, blank=True, help_text="IO518: Control State Flags P4 (16 bytes binary)")
+    indicator_state_flags_p4 = models.BinaryField(max_length=16, null=True, blank=True, help_text="IO519: Indicator State Flags P4 (16 bytes binary)")
+    security_state_flags = models.BinaryField(max_length=16, null=True, blank=True, help_text="IO132: Security State Flags (16 bytes binary)")
+
     # Power and Battery
     external_voltage = models.IntegerField(null=True, blank=True, help_text="IO066: External voltage in mV")
     battery_voltage = models.IntegerField(null=True, blank=True, help_text="IO067: Battery voltage in mV")
@@ -97,7 +104,6 @@ class GPSRecord(models.Model):
     total_mileage_can = models.BigIntegerField(null=True, blank=True, help_text="IO087: Total mileage (CAN) in meters")
     fuel_level_can = models.IntegerField(null=True, blank=True, help_text="IO089: Fuel level (CAN) % or L")
     total_mileage_counted = models.BigIntegerField(null=True, blank=True, help_text="IO105: Total mileage counted in meters")
-    security_state_flags = models.BigIntegerField(null=True, blank=True, help_text="IO132: Security state flags bit-field")
     
     # Record metadata
     created_at = models.DateTimeField(auto_now_add=True)
@@ -154,8 +160,13 @@ class GPSRecord(models.Model):
         if self.security_state_flags is None:
             return {}
         
-        # Convert to integer if needed
-        flags = int(self.security_state_flags)
+        # Convert binary data to integer
+        if isinstance(self.security_state_flags, (bytes, bytearray)):
+            # Convert binary data to 128-bit integer (little-endian)
+            flags = int.from_bytes(self.security_state_flags, byteorder='little')
+        else:
+            # Handle legacy integer data
+            flags = int(self.security_state_flags)
         
         # Extract byte 3 (bits 16-23) which contains the security flags
         byte3 = (flags >> 16) & 0xFF
@@ -187,6 +198,76 @@ class GPSRecord(models.Model):
             return ', '.join(active_flags)
         else:
             return "No security flags active"
+
+    @property
+    def security_flags_p4_decoded(self):
+        """Decode security state flags P4 (IO517) bit field"""
+        if self.security_state_flags_p4 is None:
+            return {}
+        
+        if isinstance(self.security_state_flags_p4, (bytes, bytearray)):
+            flags = int.from_bytes(self.security_state_flags_p4, byteorder='little')
+        else:
+            flags = int(self.security_state_flags_p4)
+        
+        # Define P4 security flags (16 bytes = 128 bits)
+        return {
+            'flag_bit_0': bool(flags & 0x01),
+            'flag_bit_1': bool(flags & 0x02),
+            'flag_bit_2': bool(flags & 0x04),
+            'flag_bit_3': bool(flags & 0x08),
+            'flag_bit_4': bool(flags & 0x10),
+            'flag_bit_5': bool(flags & 0x20),
+            'flag_bit_6': bool(flags & 0x40),
+            'flag_bit_7': bool(flags & 0x80),
+            # Add more bits as needed for specific P4 meanings
+        }
+    
+    @property
+    def control_flags_p4_decoded(self):
+        """Decode control state flags P4 (IO518) bit field"""
+        if self.control_state_flags_p4 is None:
+            return {}
+        
+        if isinstance(self.control_state_flags_p4, (bytes, bytearray)):
+            flags = int.from_bytes(self.control_state_flags_p4, byteorder='little')
+        else:
+            flags = int(self.control_state_flags_p4)
+        
+        return {
+            'control_bit_0': bool(flags & 0x01),
+            'control_bit_1': bool(flags & 0x02),
+            'control_bit_2': bool(flags & 0x04),
+            'control_bit_3': bool(flags & 0x08),
+            'control_bit_4': bool(flags & 0x10),
+            'control_bit_5': bool(flags & 0x20),
+            'control_bit_6': bool(flags & 0x40),
+            'control_bit_7': bool(flags & 0x80),
+            # Add more control-specific bit meanings
+        }
+    
+    @property
+    def indicator_flags_p4_decoded(self):
+        """Decode indicator state flags P4 (IO519) bit field"""
+        if self.indicator_state_flags_p4 is None:
+            return {}
+        
+        if isinstance(self.indicator_state_flags_p4, (bytes, bytearray)):
+            flags = int.from_bytes(self.indicator_state_flags_p4, byteorder='little')
+        else:
+            flags = int(self.indicator_state_flags_p4)
+        
+        return {
+            'indicator_bit_0': bool(flags & 0x01),
+            'indicator_bit_1': bool(flags & 0x02),
+            'indicator_bit_2': bool(flags & 0x04),
+            'indicator_bit_3': bool(flags & 0x08),
+            'indicator_bit_4': bool(flags & 0x10),
+            'indicator_bit_5': bool(flags & 0x20),
+            'indicator_bit_6': bool(flags & 0x40),
+            'indicator_bit_7': bool(flags & 0x80),
+            # Add more indicator-specific bit meanings
+        }
 
 
 class DeviceStatus(models.Model):
