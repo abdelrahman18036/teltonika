@@ -145,9 +145,9 @@ class GPSRecordAdmin(admin.ModelAdmin):
     movement_status.short_description = 'Movement'
 
     def security_summary(self, obj):
-        """Display security flags summary in admin list"""
+        """Display security flags summary in admin list - matches service log format"""
         if obj.security_state_flags is None:
-            return "No data"
+            return "IO132: Security State Flags = No data"
         try:
             flags = int.from_bytes(obj.security_state_flags, byteorder='little')
             if flags:
@@ -158,14 +158,14 @@ class GPSRecordAdmin(admin.ModelAdmin):
                         active_bits.append(f"bit{i}")
                 
                 if active_bits:
-                    return f"Security: {', '.join(active_bits)} (0x{flags:032X})"
+                    return f"IO132: Security State Flags = Security: {', '.join(active_bits)} (0x{flags:032X})"
                 else:
-                    return "Security: No flags active"
+                    return "IO132: Security State Flags = Security: No flags active"
             else:
-                return "Security: No flags active"
+                return "IO132: Security State Flags = Security: No flags active"
         except:
-            return "Security: Error"
-    security_summary.short_description = 'Security'
+            return "IO132: Security State Flags = Error"
+    security_summary.short_description = 'IO132 Security'
     
     def analog_voltage_1(self, obj):
         """Display analog input 1 voltage"""
@@ -201,7 +201,7 @@ class GPSRecordAdmin(admin.ModelAdmin):
     dallas_temp_1_formatted.short_description = 'Dallas Temp 1'
     
     def binary_flags_summary(self, obj):
-        """Display binary flags summary with bit-level details matching service logs"""
+        """Display P4 flags summary matching service log format"""
         summaries = []
         
         # Security State Flags P4 (IO517)
@@ -215,15 +215,15 @@ class GPSRecordAdmin(admin.ModelAdmin):
                             active_bits.append(f"bit{i}")
                     
                     if active_bits:
-                        summaries.append(f"Security P4: {', '.join(active_bits)} (0x{flags:032X})")
+                        summaries.append(f"IO517: Security State Flags P4 = Security P4: {', '.join(active_bits)} (0x{flags:032X})")
                     else:
-                        summaries.append("Security P4: No flags active")
+                        summaries.append("IO517: Security State Flags P4 = Security P4: No flags active")
                 else:
-                    summaries.append("Security P4: No flags active")
+                    summaries.append("IO517: Security State Flags P4 = Security P4: No flags active")
             except:
-                summaries.append("Security P4: Error")
+                summaries.append("IO517: Security State Flags P4 = Error")
         else:
-            summaries.append("Security P4: No data")
+            summaries.append("IO517: Security State Flags P4 = No data")
                 
         # Control State Flags P4 (IO518)
         if obj.control_state_flags_p4:
@@ -236,15 +236,15 @@ class GPSRecordAdmin(admin.ModelAdmin):
                             active_bits.append(f"bit{i}")
                     
                     if active_bits:
-                        summaries.append(f"Control P4: {', '.join(active_bits)} (0x{flags:032X})")
+                        summaries.append(f"IO518: Control State Flags P4 = Control P4: {', '.join(active_bits)} (0x{flags:032X})")
                     else:
-                        summaries.append("Control P4: No flags active")
+                        summaries.append("IO518: Control State Flags P4 = Control P4: No flags active")
                 else:
-                    summaries.append("Control P4: No flags active")
+                    summaries.append("IO518: Control State Flags P4 = Control P4: No flags active")
             except:
-                summaries.append("Control P4: Error")
+                summaries.append("IO518: Control State Flags P4 = Error")
         else:
-            summaries.append("Control P4: No data")
+            summaries.append("IO518: Control State Flags P4 = No data")
                 
         # Indicator State Flags P4 (IO519)
         if obj.indicator_state_flags_p4:
@@ -257,15 +257,15 @@ class GPSRecordAdmin(admin.ModelAdmin):
                             active_bits.append(f"bit{i}")
                     
                     if active_bits:
-                        summaries.append(f"Indicator P4: {', '.join(active_bits)} (0x{flags:032X})")
+                        summaries.append(f"IO519: Indicator State Flags P4 = Indicator P4: {', '.join(active_bits)} (0x{flags:032X})")
                     else:
-                        summaries.append("Indicator P4: No flags active")
+                        summaries.append("IO519: Indicator State Flags P4 = Indicator P4: No flags active")
                 else:
-                    summaries.append("Indicator P4: No flags active")
+                    summaries.append("IO519: Indicator State Flags P4 = Indicator P4: No flags active")
             except:
-                summaries.append("Indicator P4: Error")
+                summaries.append("IO519: Indicator State Flags P4 = Error")
         else:
-            summaries.append("Indicator P4: No data")
+            summaries.append("IO519: Indicator State Flags P4 = No data")
         
         if summaries:
             return format_html('<br>'.join(summaries))
