@@ -43,7 +43,7 @@ class GPSRecordAdmin(admin.ModelAdmin):
     ]
     search_fields = ['device__imei', 'device__device_name']
     readonly_fields = [
-        'created_at', 'formatted_coordinates', 'security_flags_summary',
+        'created_at', 'formatted_coordinates', 'security_flags_summary', 'security_summary',
         'analog_voltage_1', 'analog_voltage_2', 'accelerometer_summary',
         'dallas_temp_1_formatted', 'binary_flags_summary',
         'security_state_flags', 'security_state_flags_p4', 
@@ -90,7 +90,7 @@ class GPSRecordAdmin(admin.ModelAdmin):
         }),
         ('State Flags', {
             'fields': (
-                'security_flags_summary',
+                'security_summary',
                 'binary_flags_summary'
             ),
             'description': 'Security, control, and indicator state flags (binary data) - Read-only display'
