@@ -151,9 +151,18 @@ class GPSRecordAdmin(admin.ModelAdmin):
         try:
             flags = int.from_bytes(obj.security_state_flags, byteorder='little')
             if flags:
-                return f"Security: 0x{flags:032X}"
+                # Show active bits for IO132 Security flags
+                active_bits = []
+                for i in range(16):  # Check first 16 bits
+                    if flags & (1 << i):
+                        active_bits.append(f"bit{i}")
+                
+                if active_bits:
+                    return f"Security: {', '.join(active_bits[:3])}{'...' if len(active_bits) > 3 else ''}"
+                else:
+                    return "Security: No flags"
             else:
-                return "Security: None"
+                return "Security: Clear"
         except:
             return "Security: Error"
     security_summary.short_description = 'Security'
@@ -192,34 +201,76 @@ class GPSRecordAdmin(admin.ModelAdmin):
     dallas_temp_1_formatted.short_description = 'Dallas Temp 1'
     
     def binary_flags_summary(self, obj):
-        """Display binary flags summary"""
+        """Display binary flags summary with bit-level details"""
         summaries = []
         
+        # Security State Flags P4 (IO517)
         if obj.security_state_flags_p4:
             try:
                 flags = int.from_bytes(obj.security_state_flags_p4, byteorder='little')
                 if flags:
-                    summaries.append(f"Sec P4: 0x{flags:X}")
+                    active_bits = []
+                    for i in range(16):  # Check first 16 bits
+                        if flags & (1 << i):
+                            active_bits.append(f"bit{i}")
+                    
+                    if active_bits:
+                        summaries.append(f"Security P4: {', '.join(active_bits[:5])}{'...' if len(active_bits) > 5 else ''}")
+                    else:
+                        summaries.append("Security P4: No flags")
+                else:
+                    summaries.append("Security P4: Clear")
             except:
-                pass
+                summaries.append("Security P4: Error")
+        else:
+            summaries.append("Security P4: None")
                 
+        # Control State Flags P4 (IO518)
         if obj.control_state_flags_p4:
             try:
                 flags = int.from_bytes(obj.control_state_flags_p4, byteorder='little')
                 if flags:
-                    summaries.append(f"Ctrl P4: 0x{flags:X}")
+                    active_bits = []
+                    for i in range(16):  # Check first 16 bits
+                        if flags & (1 << i):
+                            active_bits.append(f"bit{i}")
+                    
+                    if active_bits:
+                        summaries.append(f"Control P4: {', '.join(active_bits[:5])}{'...' if len(active_bits) > 5 else ''}")
+                    else:
+                        summaries.append("Control P4: No flags")
+                else:
+                    summaries.append("Control P4: Clear")
             except:
-                pass
+                summaries.append("Control P4: Error")
+        else:
+            summaries.append("Control P4: None")
                 
+        # Indicator State Flags P4 (IO519)
         if obj.indicator_state_flags_p4:
             try:
                 flags = int.from_bytes(obj.indicator_state_flags_p4, byteorder='little')
                 if flags:
-                    summaries.append(f"Ind P4: 0x{flags:X}")
+                    active_bits = []
+                    for i in range(16):  # Check first 16 bits
+                        if flags & (1 << i):
+                            active_bits.append(f"bit{i}")
+                    
+                    if active_bits:
+                        summaries.append(f"Indicator P4: {', '.join(active_bits[:5])}{'...' if len(active_bits) > 5 else ''}")
+                    else:
+                        summaries.append("Indicator P4: No flags")
+                else:
+                    summaries.append("Indicator P4: Clear")
             except:
-                pass
+                summaries.append("Indicator P4: Error")
+        else:
+            summaries.append("Indicator P4: None")
         
-        return ", ".join(summaries) if summaries else "No P4 flags"
+        if summaries:
+            return format_html('<br>'.join(summaries))
+        else:
+            return "No P4 flags data"
     binary_flags_summary.short_description = 'P4 Flags'
 
 
