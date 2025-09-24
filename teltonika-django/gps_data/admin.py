@@ -295,11 +295,13 @@ class GPSRecordAdmin(admin.ModelAdmin):
                             active_flags.append(f"• {flag_info['description']}{bit_info}")
                     
                     if active_flags:
-                        return format_html(f"<strong>IO517 Security State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
+                        content = "<strong>IO517 Security State Flags P4:</strong><br>" + "<br>".join(active_flags)
+                        return format_html(content)
                     else:
                         return format_html("<strong>IO517 Security State Flags P4:</strong><br>• No flags active")
             except Exception as e:
-                return format_html(f"<strong>IO517 Security State Flags P4:</strong><br>• Error: {str(e)}")
+                error_msg = "<strong>IO517 Security State Flags P4:</strong><br>• Error: " + str(e)
+                return format_html(error_msg)
         else:
             return format_html("<strong>IO517 Security State Flags P4:</strong><br>• No data")
     
