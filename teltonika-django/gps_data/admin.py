@@ -288,60 +288,81 @@ class GPSRecordAdmin(admin.ModelAdmin):
         
         # IO132 Security State Flags
         if obj.security_state_flags:
-            decoded = decode_security_state_flags_io132(obj.security_state_flags)
-            if decoded:
-                active_flags = []
-                for flag_name, flag_info in decoded.items():
-                    if flag_info.get('active', False):
-                        active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
-                
-                if active_flags:
-                    sections.append(f"<strong>IO132 Security State Flags:</strong><br>{'<br>'.join(active_flags)}")
-                else:
-                    sections.append("<strong>IO132 Security State Flags:</strong><br>• No flags active")
+            try:
+                decoded = decode_security_state_flags_io132(obj.security_state_flags)
+                if decoded:
+                    active_flags = []
+                    for flag_name, flag_info in decoded.items():
+                        if flag_info.get('active', False):
+                            active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
+                    
+                    if active_flags:
+                        sections.append(f"<strong>IO132 Security State Flags:</strong><br>{'<br>'.join(active_flags)}")
+                    else:
+                        sections.append("<strong>IO132 Security State Flags:</strong><br>• No flags active")
+            except Exception as e:
+                sections.append(f"<strong>IO132 Security State Flags:</strong><br>• Error: {str(e)}")
         
         # IO517 Security State Flags P4
         if obj.security_state_flags_p4:
-            decoded = decode_security_state_flags_p4(obj.security_state_flags_p4)
-            if decoded:
-                active_flags = []
-                for flag_name, flag_info in decoded.items():
-                    if flag_info.get('active', False):
-                        bit_info = f" (bit {flag_info['bit_position']})" if 'bit_position' in flag_info else ""
-                        active_flags.append(f"• {flag_info['description']}{bit_info}")
-                
-                if active_flags:
-                    sections.append(f"<strong>IO517 Security State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
-                else:
-                    sections.append("<strong>IO517 Security State Flags P4:</strong><br>• No flags active")
+            try:
+                decoded = decode_security_state_flags_p4(obj.security_state_flags_p4)
+                if decoded:
+                    active_flags = []
+                    for flag_name, flag_info in decoded.items():
+                        # Handle CAN status flags (always show) and regular flags (only if active)
+                        if flag_name.endswith('_status') or flag_info.get('active', False):
+                            bit_info = ""
+                            if 'bit_position' in flag_info:
+                                bit_info = f" (bit {flag_info['bit_position']})"
+                            elif 'value' in flag_info:
+                                bit_info = f" (value {flag_info['value']})"
+                            active_flags.append(f"• {flag_info['description']}{bit_info}")
+                    
+                    if active_flags:
+                        sections.append(f"<strong>IO517 Security State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
+                    else:
+                        sections.append("<strong>IO517 Security State Flags P4:</strong><br>• No flags active")
+            except Exception as e:
+                sections.append(f"<strong>IO517 Security State Flags P4:</strong><br>• Error: {str(e)}")
         
         # IO518 Control State Flags P4
         if obj.control_state_flags_p4:
-            decoded = decode_control_state_flags_p4(obj.control_state_flags_p4)
-            if decoded:
-                active_flags = []
-                for flag_name, flag_info in decoded.items():
-                    if flag_info.get('active', False):
-                        active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
-                
-                if active_flags:
-                    sections.append(f"<strong>IO518 Control State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
-                else:
-                    sections.append("<strong>IO518 Control State Flags P4:</strong><br>• No flags active")
+            try:
+                decoded = decode_control_state_flags_p4(obj.control_state_flags_p4)
+                if decoded:
+                    active_flags = []
+                    for flag_name, flag_info in decoded.items():
+                        if flag_info.get('active', False):
+                            active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
+                    
+                    if active_flags:
+                        sections.append(f"<strong>IO518 Control State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
+                    else:
+                        sections.append("<strong>IO518 Control State Flags P4:</strong><br>• No flags active")
+            except Exception as e:
+                sections.append(f"<strong>IO518 Control State Flags P4:</strong><br>• Error: {str(e)}")
+        else:
+            sections.append("<strong>IO518 Control State Flags P4:</strong><br>• No data")
         
         # IO519 Indicator State Flags P4
         if obj.indicator_state_flags_p4:
-            decoded = decode_indicator_state_flags_p4(obj.indicator_state_flags_p4)
-            if decoded:
-                active_flags = []
-                for flag_name, flag_info in decoded.items():
-                    if flag_info.get('active', False):
-                        active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
-                
-                if active_flags:
-                    sections.append(f"<strong>IO519 Indicator State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
-                else:
-                    sections.append("<strong>IO519 Indicator State Flags P4:</strong><br>• No flags active")
+            try:
+                decoded = decode_indicator_state_flags_p4(obj.indicator_state_flags_p4)
+                if decoded:
+                    active_flags = []
+                    for flag_name, flag_info in decoded.items():
+                        if flag_info.get('active', False):
+                            active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
+                    
+                    if active_flags:
+                        sections.append(f"<strong>IO519 Indicator State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
+                    else:
+                        sections.append("<strong>IO519 Indicator State Flags P4:</strong><br>• No flags active")
+            except Exception as e:
+                sections.append(f"<strong>IO519 Indicator State Flags P4:</strong><br>• Error: {str(e)}")
+        else:
+            sections.append("<strong>IO519 Indicator State Flags P4:</strong><br>• No data")
         
         if sections:
             return format_html('<br><br>'.join(sections))

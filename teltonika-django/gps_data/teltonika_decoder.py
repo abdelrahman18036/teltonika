@@ -46,21 +46,24 @@ def decode_security_state_flags_p4(flags_value):
     }
     
     decoded_flags['can1_status'] = {
-        'active': True,
+        'active': True,  # Always show CAN status regardless of value
         'description': f"CAN1 {can_status_map.get(can1_status, 'unknown status')}",
-        'value': can1_status
+        'value': can1_status,
+        'bit_position': '0-1'
     }
     
     decoded_flags['can2_status'] = {
-        'active': True,
+        'active': True,  # Always show CAN status regardless of value
         'description': f"CAN2 {can_status_map.get(can2_status, 'unknown status')}",
-        'value': can2_status
+        'value': can2_status,
+        'bit_position': '2-3'
     }
     
     decoded_flags['can3_status'] = {
-        'active': True,
+        'active': True,  # Always show CAN status regardless of value
         'description': f"CAN3 {can_status_map.get(can3_status, 'unknown status')}",
-        'value': can3_status
+        'value': can3_status,
+        'bit_position': '4-5'
     }
     
     # Byte 1 - Engine and Vehicle Status (bits 8-15)
