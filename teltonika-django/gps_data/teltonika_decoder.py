@@ -20,7 +20,10 @@ def decode_security_state_flags_p4(flags_value):
     """
     
     # Convert to integer if needed
-    if isinstance(flags_value, (bytes, bytearray)):
+    if isinstance(flags_value, (bytes, bytearray, memoryview)):
+        # Convert memoryview to bytes first if needed
+        if isinstance(flags_value, memoryview):
+            flags_value = flags_value.tobytes()
         flags = int.from_bytes(flags_value, byteorder='little')
     elif isinstance(flags_value, str):
         # Handle hex string format like "0x0000000000000000000002810004003C"

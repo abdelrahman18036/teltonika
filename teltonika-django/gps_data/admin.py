@@ -276,31 +276,45 @@ class GPSRecordAdmin(admin.ModelAdmin):
     
     def decoded_flags_display(self, obj):
         """Display decoded Security State Flags P4 (IO517) according to Teltonika CAN adapter specification"""
-        # Simple test - just return a basic message to see if method is working
+        # Debug logging (REMOVE IN PRODUCTION!)
+        import logging
+        logger = logging.getLogger('gps_data')
+        
         if obj.security_state_flags_p4:
             from .teltonika_decoder import decode_security_state_flags_p4
             try:
+                # Debug: Log raw data
+                raw_hex = obj.security_state_flags_p4.hex() if obj.security_state_flags_p4 else "None"
+                logger.info(f"Admin Debug - Record {obj.id}: Raw P4 data: {raw_hex}")
+                
                 decoded = decode_security_state_flags_p4(obj.security_state_flags_p4)
+                logger.info(f"Admin Debug - Record {obj.id}: Decoded {len(decoded)} flags")
+                
                 if decoded:
                     active_flags = []
                     for flag_name, flag_info in decoded.items():
                         # Handle CAN status flags (always show) and regular flags (only if active)
-                        if flag_name.endswith('_status') or flag_info.get('active', False):
+                        is_active = flag_name.endswith('_status') or flag_info.get('active', False)
+                        if is_active:
                             bit_info = ""
                             if 'bit_position' in flag_info:
                                 bit_info = f" (bit {flag_info['bit_position']})"
                             elif 'value' in flag_info:
                                 bit_info = f" (value {flag_info['value']})"
                             active_flags.append(f"• {flag_info['description']}{bit_info}")
+                            logger.info(f"Admin Debug - Active flag: {flag_name} = {flag_info.get('description')}")
+                    
+                    logger.info(f"Admin Debug - Record {obj.id}: Found {len(active_flags)} active flags")
                     
                     if active_flags:
                         content = "IO517 Security State Flags P4:<br>" + "<br>".join(active_flags)
                         return mark_safe(content)
                     else:
-                        return "No flags active"
+                        return f"No active flags (total decoded: {len(decoded)})"
                 else:
                     return "No flags decoded"
             except Exception as e:
+                logger.error(f"Admin Debug - Decode error: {e}")
                 return f"Decode error: {str(e)}"
         else:
             return "No P4 data"
