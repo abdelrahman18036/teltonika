@@ -298,8 +298,8 @@ class GPSRecordAdmin(admin.ModelAdmin):
                         return mark_safe(content)
                     else:
                         return "No flags active"
-                except Exception as e:
-                    return f"Error: {str(e)}"
+                else:
+                    return "No flags decoded"
             except Exception as e:
                 return f"Decode error: {str(e)}"
         else:
