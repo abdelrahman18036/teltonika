@@ -276,10 +276,9 @@ class GPSRecordAdmin(admin.ModelAdmin):
     
     def decoded_flags_display(self, obj):
         """Display decoded Security State Flags P4 (IO517) according to Teltonika CAN adapter specification"""
-        from .teltonika_decoder import decode_security_state_flags_p4
-        
-        # Only decode IO517 Security State Flags P4 as requested
+        # Simple test - just return a basic message to see if method is working
         if obj.security_state_flags_p4:
+            from .teltonika_decoder import decode_security_state_flags_p4
             try:
                 decoded = decode_security_state_flags_p4(obj.security_state_flags_p4)
                 if decoded:
@@ -295,15 +294,16 @@ class GPSRecordAdmin(admin.ModelAdmin):
                             active_flags.append(f"• {flag_info['description']}{bit_info}")
                     
                     if active_flags:
-                        content = "<strong>IO517 Security State Flags P4:</strong><br>" + "<br>".join(active_flags)
-                        return format_html(content)
+                        content = "IO517 Security State Flags P4:<br>" + "<br>".join(active_flags)
+                        return mark_safe(content)
                     else:
-                        return format_html("<strong>IO517 Security State Flags P4:</strong><br>• No flags active")
+                        return "No flags active"
+                except Exception as e:
+                    return f"Error: {str(e)}"
             except Exception as e:
-                error_msg = "<strong>IO517 Security State Flags P4:</strong><br>• Error: " + str(e)
-                return format_html(error_msg)
+                return f"Decode error: {str(e)}"
         else:
-            return format_html("<strong>IO517 Security State Flags P4:</strong><br>• No data")
+            return "No P4 data"
     
     decoded_flags_display.short_description = 'Security State Flags P4 (Decoded)'
 
