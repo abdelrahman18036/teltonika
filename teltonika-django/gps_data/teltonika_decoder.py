@@ -28,8 +28,14 @@ def decode_security_state_flags_p4(flags_value):
             flags = int(flags_value, 16)
         else:
             flags = int(flags_value)
+    elif isinstance(flags_value, int):
+        flags = flags_value
     else:
-        flags = int(flags_value)
+        # Handle any other type by attempting conversion
+        try:
+            flags = int(flags_value)
+        except (ValueError, TypeError):
+            return {}
     
     decoded_flags = {}
     
@@ -139,8 +145,14 @@ def decode_control_state_flags_p4(flags_value):
             flags = int(flags_value, 16)
         else:
             flags = int(flags_value)
+    elif isinstance(flags_value, int):
+        flags = flags_value
     else:
-        flags = int(flags_value)
+        # Handle any other type by attempting conversion
+        try:
+            flags = int(flags_value)
+        except (ValueError, TypeError):
+            return {}
     
     decoded_flags = {}
     
@@ -191,8 +203,14 @@ def decode_indicator_state_flags_p4(flags_value):
             flags = int(flags_value, 16)
         else:
             flags = int(flags_value)
+    elif isinstance(flags_value, int):
+        flags = flags_value
     else:
-        flags = int(flags_value)
+        # Handle any other type by attempting conversion
+        try:
+            flags = int(flags_value)
+        except (ValueError, TypeError):
+            return {}
     
     decoded_flags = {}
     
@@ -242,8 +260,14 @@ def decode_security_state_flags_io132(flags_value):
             flags = int(flags_value, 16)
         else:
             flags = int(flags_value)
+    elif isinstance(flags_value, int):
+        flags = flags_value
     else:
-        flags = int(flags_value)
+        # Handle any other type by attempting conversion
+        try:
+            flags = int(flags_value)
+        except (ValueError, TypeError):
+            return {}
     
     decoded_flags = {}
     
