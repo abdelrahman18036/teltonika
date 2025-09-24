@@ -156,118 +156,55 @@ class GPSRecord(models.Model):
 
     @property
     def security_flags_decoded(self):
-        """Decode security state flags (IO132) bit field"""
-        if self.security_state_flags is None:
-            return {}
-        
-        # Convert binary data to integer
-        if isinstance(self.security_state_flags, (bytes, bytearray)):
-            # Convert binary data to 128-bit integer (little-endian)
-            flags = int.from_bytes(self.security_state_flags, byteorder='little')
-        else:
-            # Handle legacy integer data
-            flags = int(self.security_state_flags)
-        
-        # Extract byte 3 (bits 16-23) which contains the security flags
-        byte3 = (flags >> 16) & 0xFF
-        
-        return {
-            'key_in_ignition': bool(byte3 & 0x01),
-            'ignition_on': bool(byte3 & 0x02),
-            'dynamic_ign_on': bool(byte3 & 0x04),
-            'webasto_on': bool(byte3 & 0x08),
-            'car_locked': bool(byte3 & 0x10),
-            'car_locked_remote': bool(byte3 & 0x20),
-            'alarm_active': bool(byte3 & 0x40),
-            'immobilizer': bool(byte3 & 0x80),
-        }
+        """Decode security state flags (IO132) bit field according to Teltonika specification"""
+        from .teltonika_decoder import decode_security_state_flags_io132
+        return decode_security_state_flags_io132(self.security_state_flags)
 
     @property
     def security_flags_summary(self):
-        """Get a summary of active security flags"""
+        """Get a summary of active security flags (IO132)"""
+        from .teltonika_decoder import format_flags_summary
         flags = self.security_flags_decoded
-        if not flags:
-            return "No security data"
-        
-        active_flags = []
-        for flag_name, is_active in flags.items():
-            if is_active:
-                active_flags.append(flag_name.replace('_', ' ').title())
-        
-        if active_flags:
-            return ', '.join(active_flags)
-        else:
-            return "No security flags active"
+        return format_flags_summary(flags)
+    
+    @property
+    def security_flags_p4_summary(self):
+        """Get a summary of active security flags P4 (IO517)"""
+        from .teltonika_decoder import format_flags_summary
+        flags = self.security_flags_p4_decoded
+        return format_flags_summary(flags)
+    
+    @property
+    def control_flags_p4_summary(self):
+        """Get a summary of active control flags P4 (IO518)"""
+        from .teltonika_decoder import format_flags_summary
+        flags = self.control_flags_p4_decoded
+        return format_flags_summary(flags)
+    
+    @property
+    def indicator_flags_p4_summary(self):
+        """Get a summary of active indicator flags P4 (IO519)"""
+        from .teltonika_decoder import format_flags_summary
+        flags = self.indicator_flags_p4_decoded
+        return format_flags_summary(flags)
 
     @property
     def security_flags_p4_decoded(self):
-        """Decode security state flags P4 (IO517) bit field"""
-        if self.security_state_flags_p4 is None:
-            return {}
-        
-        if isinstance(self.security_state_flags_p4, (bytes, bytearray)):
-            flags = int.from_bytes(self.security_state_flags_p4, byteorder='little')
-        else:
-            flags = int(self.security_state_flags_p4)
-        
-        # Define P4 security flags (16 bytes = 128 bits)
-        return {
-            'flag_bit_0': bool(flags & 0x01),
-            'flag_bit_1': bool(flags & 0x02),
-            'flag_bit_2': bool(flags & 0x04),
-            'flag_bit_3': bool(flags & 0x08),
-            'flag_bit_4': bool(flags & 0x10),
-            'flag_bit_5': bool(flags & 0x20),
-            'flag_bit_6': bool(flags & 0x40),
-            'flag_bit_7': bool(flags & 0x80),
-            # Add more bits as needed for specific P4 meanings
-        }
+        """Decode security state flags P4 (IO517) bit field according to Teltonika specification"""
+        from .teltonika_decoder import decode_security_state_flags_p4
+        return decode_security_state_flags_p4(self.security_state_flags_p4)
     
     @property
     def control_flags_p4_decoded(self):
-        """Decode control state flags P4 (IO518) bit field"""
-        if self.control_state_flags_p4 is None:
-            return {}
-        
-        if isinstance(self.control_state_flags_p4, (bytes, bytearray)):
-            flags = int.from_bytes(self.control_state_flags_p4, byteorder='little')
-        else:
-            flags = int(self.control_state_flags_p4)
-        
-        return {
-            'control_bit_0': bool(flags & 0x01),
-            'control_bit_1': bool(flags & 0x02),
-            'control_bit_2': bool(flags & 0x04),
-            'control_bit_3': bool(flags & 0x08),
-            'control_bit_4': bool(flags & 0x10),
-            'control_bit_5': bool(flags & 0x20),
-            'control_bit_6': bool(flags & 0x40),
-            'control_bit_7': bool(flags & 0x80),
-            # Add more control-specific bit meanings
-        }
+        """Decode control state flags P4 (IO518) bit field according to Teltonika specification"""
+        from .teltonika_decoder import decode_control_state_flags_p4
+        return decode_control_state_flags_p4(self.control_state_flags_p4)
     
     @property
     def indicator_flags_p4_decoded(self):
-        """Decode indicator state flags P4 (IO519) bit field"""
-        if self.indicator_state_flags_p4 is None:
-            return {}
-        
-        if isinstance(self.indicator_state_flags_p4, (bytes, bytearray)):
-            flags = int.from_bytes(self.indicator_state_flags_p4, byteorder='little')
-        else:
-            flags = int(self.indicator_state_flags_p4)
-        
-        return {
-            'indicator_bit_0': bool(flags & 0x01),
-            'indicator_bit_1': bool(flags & 0x02),
-            'indicator_bit_2': bool(flags & 0x04),
-            'indicator_bit_3': bool(flags & 0x08),
-            'indicator_bit_4': bool(flags & 0x10),
-            'indicator_bit_5': bool(flags & 0x20),
-            'indicator_bit_6': bool(flags & 0x40),
-            'indicator_bit_7': bool(flags & 0x80),
-            # Add more indicator-specific bit meanings
-        }
+        """Decode indicator state flags P4 (IO519) bit field according to Teltonika specification"""
+        from .teltonika_decoder import decode_indicator_state_flags_p4
+        return decode_indicator_state_flags_p4(self.indicator_state_flags_p4)
 
 
 class DeviceStatus(models.Model):

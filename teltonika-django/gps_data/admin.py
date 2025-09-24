@@ -45,7 +45,7 @@ class GPSRecordAdmin(admin.ModelAdmin):
     readonly_fields = [
         'created_at', 'formatted_coordinates', 'security_flags_summary', 'security_summary',
         'analog_voltage_1', 'analog_voltage_2', 'accelerometer_summary',
-        'dallas_temp_1_formatted', 'binary_flags_summary',
+        'dallas_temp_1_formatted', 'binary_flags_summary', 'decoded_flags_display',
         'security_state_flags', 'security_state_flags_p4', 
         'control_state_flags_p4', 'indicator_state_flags_p4'
     ]
@@ -91,9 +91,10 @@ class GPSRecordAdmin(admin.ModelAdmin):
         ('State Flags', {
             'fields': (
                 'security_summary',
-                'binary_flags_summary'
+                'binary_flags_summary',
+                'decoded_flags_display'
             ),
-            'description': 'Security, control, and indicator state flags (binary data) - Read-only display'
+            'description': 'Security, control, and indicator state flags (binary data) with decoded meanings according to Teltonika specification'
         }),
         ('Power & Battery', {
             'fields': (
@@ -272,6 +273,82 @@ class GPSRecordAdmin(admin.ModelAdmin):
         else:
             return "No P4 flags data"
     binary_flags_summary.short_description = 'P4 Flags'
+    
+    def decoded_flags_display(self, obj):
+        """Display decoded flags according to Teltonika CAN adapter specification"""
+        from .teltonika_decoder import (
+            decode_security_state_flags_io132,
+            decode_security_state_flags_p4,
+            decode_control_state_flags_p4,
+            decode_indicator_state_flags_p4,
+            format_flags_summary
+        )
+        
+        sections = []
+        
+        # IO132 Security State Flags
+        if obj.security_state_flags:
+            decoded = decode_security_state_flags_io132(obj.security_state_flags)
+            if decoded:
+                active_flags = []
+                for flag_name, flag_info in decoded.items():
+                    if flag_info.get('active', False):
+                        active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
+                
+                if active_flags:
+                    sections.append(f"<strong>IO132 Security State Flags:</strong><br>{'<br>'.join(active_flags)}")
+                else:
+                    sections.append("<strong>IO132 Security State Flags:</strong><br>• No flags active")
+        
+        # IO517 Security State Flags P4
+        if obj.security_state_flags_p4:
+            decoded = decode_security_state_flags_p4(obj.security_state_flags_p4)
+            if decoded:
+                active_flags = []
+                for flag_name, flag_info in decoded.items():
+                    if flag_info.get('active', False):
+                        bit_info = f" (bit {flag_info['bit_position']})" if 'bit_position' in flag_info else ""
+                        active_flags.append(f"• {flag_info['description']}{bit_info}")
+                
+                if active_flags:
+                    sections.append(f"<strong>IO517 Security State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
+                else:
+                    sections.append("<strong>IO517 Security State Flags P4:</strong><br>• No flags active")
+        
+        # IO518 Control State Flags P4
+        if obj.control_state_flags_p4:
+            decoded = decode_control_state_flags_p4(obj.control_state_flags_p4)
+            if decoded:
+                active_flags = []
+                for flag_name, flag_info in decoded.items():
+                    if flag_info.get('active', False):
+                        active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
+                
+                if active_flags:
+                    sections.append(f"<strong>IO518 Control State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
+                else:
+                    sections.append("<strong>IO518 Control State Flags P4:</strong><br>• No flags active")
+        
+        # IO519 Indicator State Flags P4
+        if obj.indicator_state_flags_p4:
+            decoded = decode_indicator_state_flags_p4(obj.indicator_state_flags_p4)
+            if decoded:
+                active_flags = []
+                for flag_name, flag_info in decoded.items():
+                    if flag_info.get('active', False):
+                        active_flags.append(f"• {flag_info['description']} (bit {flag_info['bit_position']})")
+                
+                if active_flags:
+                    sections.append(f"<strong>IO519 Indicator State Flags P4:</strong><br>{'<br>'.join(active_flags)}")
+                else:
+                    sections.append("<strong>IO519 Indicator State Flags P4:</strong><br>• No flags active")
+        
+        if sections:
+            return format_html('<br><br>'.join(sections))
+        else:
+            return "No flag data available"
+    
+    decoded_flags_display.short_description = 'Decoded Flags (Teltonika Spec)'
 
 
 @admin.register(DeviceStatus)
